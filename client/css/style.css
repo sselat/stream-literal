@@ -470,6 +470,9 @@ body {
   justify-content: space-between;
   pointer-events: none;
   z-index: 5;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .streamer-badge {
@@ -525,17 +528,34 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
   opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transform: translateY(8px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
   z-index: 10;
   user-select: none;
+  pointer-events: none;
 }
 
-.spotlight-player-wrapper:hover .spotlight-controls,
+/* Visibilidade ativada dinamicamente pelo movimento do mouse */
+.spotlight-player-wrapper.user-active .spotlight-controls,
 .spotlight-controls:hover,
-.spotlight-controls:focus-within {
+.spotlight-controls:focus-within,
+.spotlight-controls.interacting {
   opacity: 1;
   transform: translateY(0);
+  pointer-events: auto;
+}
+
+.spotlight-player-wrapper.user-active .spotlight-overlay-top {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Ocultação do cursor do mouse em tela cheia inativa */
+.spotlight-player-wrapper.hide-cursor {
+  cursor: none;
+}
+.spotlight-player-wrapper.hide-cursor * {
+  cursor: none !important;
 }
 
 .control-btn {
