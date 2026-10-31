@@ -1014,6 +1014,47 @@ body {
   border-bottom: none;
 }
 
+/* Toast / Notificações Flutuantes */
+.toast-notice {
+  position: fixed;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: rgba(17, 24, 39, 0.96);
+  backdrop-filter: blur(8px);
+  color: var(--text-main);
+  padding: 10px 20px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  font-size: 0.85rem;
+  font-weight: 500;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  z-index: 999;
+}
+
+.toast-notice.toast-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast-notice.toast-warning {
+  border-color: #f59e0b;
+  color: #fef3c7;
+}
+
+.toast-notice.toast-error {
+  border-color: var(--danger);
+  color: #fee2e2;
+}
+
+.toast-notice.toast-success {
+  border-color: var(--success);
+  color: #d1fae5;
+}
+
 /* Responsividade básica */
 @media (max-width: 768px) {
   .main-stage {

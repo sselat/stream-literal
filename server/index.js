@@ -39,10 +39,33 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+const HOST = '0.0.0.0';
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ [ERRO FATAL] A porta ${PORT} já está sendo usada por outro processo.`);
+    console.error(`   Feche o outro terminal aberto ou finalize o processo node no Gerenciador de Tarefas.\n`);
+    process.exit(1);
+  } else {
+    console.error('❌ [ERRO NO SERVIDOR]:', err);
+  }
+});
+
+// Encerramento gracioso para liberar a porta no Windows imediatamente
+process.on('SIGINT', () => {
+  console.log('\n🛑 Encerrando servidor e liberando portas...');
+  server.close(() => process.exit(0));
+});
+
+process.on('SIGTERM', () => {
+  server.close(() => process.exit(0));
+});
+
+server.listen(PORT, HOST, () => {
   console.log('====================================================');
   console.log(`🚀 [STREAM LITERAL] Servidor iniciado com sucesso!`);
   console.log(`🌐 Acesso Local:     http://localhost:${PORT}`);
+  console.log(`🌐 Acesso Rede IPv4: http://127.0.0.1:${PORT}`);
   console.log(`🔒 Para acesso externo seguro, use Cloudflare Tunnel`);
   console.log('====================================================');
 });

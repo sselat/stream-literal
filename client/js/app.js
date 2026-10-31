@@ -139,6 +139,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Função para exibir alertas e avisos visuais no topo
+  function showNotice(message, type = 'info') {
+    const existing = document.getElementById('app-toast-notice');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'app-toast-notice';
+    toast.className = `toast-notice toast-${type}`;
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('toast-show');
+    }, 10);
+
+    setTimeout(() => {
+      toast.classList.remove('toast-show');
+      setTimeout(() => toast.remove(), 350);
+    }, 6000);
+  }
+
   // ========================================================
   // CONEXÃO SOCKET.IO E WEBRTC
   // ========================================================
@@ -146,7 +168,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = API.getToken();
     socket = io({
       auth: { token },
-      transports: ['websocket', 'polling']
+      transports: ['websocket'], // Conexão persistente WebSocket pura (evita problemas de polling Anycast no Cloudflare)
+      reconnection: true,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000
     });
 
     socket.on('connect', () => {
@@ -155,11 +182,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('connect_error', (err) => {
-      console.error('Erro no socket:', err.message);
-      roomStatusText.textContent = 'Erro de conexão';
+      console.warn('Conexão Socket.io instável ou reconectando:', err.message);
+      roomStatusText.textContent = 'Reconectando...';
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      console.warn('Socket desconectado:', reason);
       roomStatusText.textContent = 'Desconectado';
     });
 
@@ -169,7 +197,8 @@ document.addEventListener('DOMContentLoaded', () => {
       currentUser,
       handleStreamAdded,
       handleStreamRemoved,
-      handleStreamingStateChanged
+      handleStreamingStateChanged,
+      showNotice
     );
 
     // Estado inicial da sala recebido do servidor
