@@ -994,6 +994,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (btnAddCustomExe && customExeInput) {
+    customExeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        btnAddCustomExe.click();
+      }
+    });
+
     btnAddCustomExe.addEventListener('click', () => {
       let val = customExeInput.value.trim().toLowerCase();
       if (!val) return;
