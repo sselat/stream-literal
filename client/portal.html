@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Estelar — Stream Literal</title>
+  <link rel="icon" type="image/png" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .portal-box {
+      max-width: 480px;
+      width: 90%;
+      text-align: center;
+      padding: 40px 32px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .portal-spinner {
+      width: 42px;
+      height: 42px;
+      border: 3px solid rgba(88, 101, 242, 0.2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin: 24px 0 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .portal-status-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--text-normal);
+      margin-bottom: 8px;
+    }
+    .portal-status-desc {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .portal-actions {
+      display: none;
+      gap: 12px;
+      width: 100%;
+    }
+  </style>
+  <script src="js/config.js"></script>
+</head>
+<body class="dark-theme" style="display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;">
+
+  <div class="portal-box">
+    <div class="brand-logo-pod">
+      <div class="pod-glow-ring"></div>
+      <img src="assets/logo.png" alt="Stream Literal Logo" class="brand-logo-img">
+    </div>
+
+    <h2 style="margin: 16px 0 4px; font-size: 1.4rem;">Stream Literal</h2>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 8px;">Portal de Redirecionamento Automático</p>
+
+    <div id="spinner" class="portal-spinner"></div>
+    <div id="portal-title" class="portal-status-title">Sintonizando sinal da transmissão...</div>
+    <div id="portal-desc" class="portal-status-desc">Localizando o endereço ativo do servidor via Service Discovery.</div>
+
+    <div id="portal-actions" class="portal-actions">
+      <button id="btn-portal-retry" class="btn btn-primary btn-block">
+        <span>Tentar Conectar Novamente</span>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    async function locateServer() {
+      const spinner = document.getElementById('spinner');
+      const title = document.getElementById('portal-title');
+      const desc = document.getElementById('portal-desc');
+      const actions = document.getElementById('portal-actions');
+
+      spinner.style.display = 'block';
+      actions.style.display = 'none';
+      title.textContent = 'Sintonizando sinal da transmissão...';
+      desc.textContent = 'Localizando o endereço ativo do servidor via Service Discovery.';
+
+      const gistId = window.STREAM_LITERAL_CONFIG?.discoveryGistId || localStorage.getItem('stream_literal_gist_id');
+
+      if (!gistId || gistId.length < 5 || gistId.startsWith('SEU_')) {
+        spinner.style.display = 'none';
+        actions.style.display = 'block';
+        title.textContent = '🛰️ Houston, we have a problem';
+        desc.textContent = 'O ID de descoberta do servidor ainda não foi configurado. Inicie o túnel do servidor para gerar o endereço.';
+        return;
+      }
+
+      try {
+        const res = await fetch(`https://api.github.com/gists/${gistId}?t=${Date.now()}`, {
+          headers: { 'Accept': 'application/vnd.github.v3+json' },
+          signal: AbortSignal.timeout(6000)
+        });
+
+        if (!res.ok) {
+          throw new Error('Gist não encontrado ou indisponível.');
+        }
+
+        const data = await res.json();
+        const file = data.files && (data.files['stream_literal_discovery.json'] || Object.values(data.files)[0]);
+        if (file && file.content) {
+          const parsed = JSON.parse(file.content);
+          if (parsed.url && parsed.url.startsWith('https://')) {
+            title.textContent = '🚀 Sinal localizado!';
+            desc.textContent = 'Redirecionando você para a sala de transmissão...';
+            setTimeout(() => {
+              window.location.replace(parsed.url);
+            }, 500);
+            return;
+          }
+        }
+
+        throw new Error('Nenhuma URL ativa cadastrada.');
+      } catch (err) {
+        spinner.style.display = 'none';
+        actions.style.display = 'block';
+        title.textContent = '🛰️ Houston, we have a problem';
+        desc.textContent = 'A base estelar do Espaço Literal está fora de órbita no momento (o servidor parece estar offline).';
+      }
+    }
+
+    document.getElementById('btn-portal-retry').addEventListener('click', locateServer);
+    locateServer();
+  </script>
+</body>
+</html>

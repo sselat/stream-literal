@@ -5,4 +5,5 @@ bin/
 *.db-journal
 *.db-wal
 *.db-shm
+src-tauri/target/
 .DS_Store

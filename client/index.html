@@ -4,12 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stream Literal — Compartilhamento de Tela Privado</title>
+  <link rel="icon" type="image/png" href="assets/logo.png">
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Socket.io client -->
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Socket.io client local bundle -->
+  <script src="js/socket.io.min.js"></script>
 </head>
 <body class="dark-theme">
 
@@ -17,12 +18,9 @@
   <div id="login-container" class="auth-wrapper">
     <div class="auth-card">
       <div class="brand-header">
-        <div class="brand-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-            <line x1="8" y1="21" x2="16" y2="21"></line>
-            <line x1="12" y1="17" x2="12" y2="21"></line>
-          </svg>
+        <div class="brand-logo-pod">
+          <div class="pod-glow-ring"></div>
+          <img src="assets/logo.png" alt="Stream Literal Logo" class="brand-logo-img">
         </div>
         <h1>Stream Literal</h1>
         <p>Compartilhamento de tela e áudio em tempo real</p>
@@ -59,11 +57,9 @@
     <header class="top-nav">
       <div class="nav-left">
         <div class="logo-badge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-            <line x1="8" y1="21" x2="16" y2="21"></line>
-            <line x1="12" y1="17" x2="12" y2="21"></line>
-          </svg>
+          <div class="nav-logo-capsule">
+            <img src="assets/logo.png" alt="Stream Literal Logo" class="nav-logo-img">
+          </div>
           <span class="brand-title">Stream Literal</span>
         </div>
         <div class="room-indicator">
@@ -96,6 +92,23 @@
         </button>
       </div>
     </header>
+
+    <!-- Banner de Servidor Offline -->
+    <div id="server-offline-banner" class="offline-banner" style="display: none;">
+      <div class="offline-content">
+        <div class="offline-beacon">
+          <span class="offline-icon">🛰️</span>
+        </div>
+        <div class="offline-texts">
+          <div class="offline-title">Houston, we have a problem</div>
+          <div class="offline-desc">A base estelar do Espaço Literal está fora de órbita. Tentando restabelecer contato...</div>
+        </div>
+        <button type="button" id="btn-retry-connection" class="btn btn-secondary btn-sm offline-retry-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Reconectar</span>
+        </button>
+      </div>
+    </div>
 
     <!-- Espaço Principal de Trabalho -->
     <main class="main-stage">
@@ -218,6 +231,11 @@
             </svg>
             <span id="btn-toggle-share-text">Compartilhar Tela</span>
           </button>
+
+          <button id="btn-audio-settings" class="btn btn-secondary btn-lg" title="Configurar Isolamento de Áudio">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+            <span>Filtro de Áudio</span>
+          </button>
         </div>
 
         <div class="bottom-helper-tip">
@@ -227,6 +245,60 @@
       </div>
     </footer>
 
+  </div>
+
+  <!-- ================= MODAL ISOLAMENTO DE ÁUDIO ================= -->
+  <div id="audio-settings-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <div class="modal-title-with-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          <h3>Isolamento de Áudio da Transmissão</h3>
+        </div>
+        <button id="btn-close-audio-modal" class="btn-close">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-desc">
+          Controle exatamente quais sons do computador são transmitidos aos seus amigos. As configurações ficam salvas permanentemente no seu aplicativo.
+        </p>
+
+        <!-- Seletor de Modo -->
+        <div class="audio-mode-selector">
+          <label class="radio-card active" id="mode-card-exclude">
+            <input type="radio" name="audio-mode" value="exclude" checked>
+            <div class="radio-card-content">
+              <strong>Modo Inteligente (Silenciar Selecionados)</strong>
+              <span>Transmite todo o som do computador, mas <strong>bloqueia</strong> os aplicativos marcados abaixo (ideal para silenciar o Discord).</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="audio-apps-header">
+          <span>Aplicativos em Execução</span>
+          <button type="button" id="btn-refresh-audio-apps" class="btn btn-secondary btn-xs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>Atualizar Lista</span>
+          </button>
+        </div>
+
+        <!-- Lista de Apps com checkboxes -->
+        <div id="audio-apps-list" class="audio-apps-list">
+          <div class="loading-apps">Carregando aplicativos ativos...</div>
+        </div>
+
+        <!-- Input para adicionar executável manual -->
+        <div class="custom-exe-row">
+          <input type="text" id="custom-exe-input" placeholder="Adicionar outro executável (ex: discord.exe)">
+          <button type="button" id="btn-add-custom-exe" class="btn btn-secondary btn-sm">Adicionar</button>
+        </div>
+
+        <div class="modal-actions-footer">
+          <button type="button" id="btn-save-audio-settings" class="btn btn-primary btn-block">Salvar Preferências de Áudio</button>
+        </div>
+        <div id="audio-settings-status" class="status-msg"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ================= MODAL ALTERAR SENHA ================= -->
@@ -305,7 +377,9 @@
   </div>
 
   <!-- Scripts da aplicação -->
+  <script src="js/config.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/audio_bridge.js"></script>
   <script src="js/webrtc.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Elementos do Top Nav
   const roomStatusText = document.getElementById('room-status-text');
+  const statusDot = document.querySelector('.status-dot');
+  const serverOfflineBanner = document.getElementById('server-offline-banner');
+  const btnRetryConnection = document.getElementById('btn-retry-connection');
   const userAvatarInitials = document.getElementById('user-avatar-initials');
   const userDisplayName = document.getElementById('user-display-name');
   const userRoleBadge = document.getElementById('user-role-badge');
@@ -62,6 +65,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const formChangePassword = document.getElementById('form-change-password');
   const changePasswordStatus = document.getElementById('change-password-status');
 
+  // Elementos do Modal Isolamento de Áudio
+  const btnAudioSettings = document.getElementById('btn-audio-settings');
+  const audioSettingsModal = document.getElementById('audio-settings-modal');
+  const btnCloseAudioModal = document.getElementById('btn-close-audio-modal');
+  const audioAppsList = document.getElementById('audio-apps-list');
+  const btnRefreshAudioApps = document.getElementById('btn-refresh-audio-apps');
+  const customExeInput = document.getElementById('custom-exe-input');
+  const btnAddCustomExe = document.getElementById('btn-add-custom-exe');
+  const btnSaveAudioSettings = document.getElementById('btn-save-audio-settings');
+  const audioSettingsStatus = document.getElementById('audio-settings-status');
+
   // Estado da Aplicação
   let currentUser = null;
   let socket = null;
@@ -72,9 +86,48 @@ document.addEventListener('DOMContentLoaded', () => {
   let pinnedPeerId = null;
 
   // ========================================================
+  // TRAVA DE NAVEGADOR (EXPERIÊNCIA 100% SOFTWARE NATIVO)
+  // ========================================================
+  function setupDesktopRestrictions() {
+    if (!API.isDesktopApp()) return;
+
+    // 1. Desativa menu de contexto (botão direito do navegador)
+    // Permite apenas em campos de texto (input/textarea) para copiar e colar
+    window.addEventListener('contextmenu', (e) => {
+      const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+      if (!isInput) {
+        e.preventDefault();
+      }
+    });
+
+    // 2. Desativa atalhos de navegador (F5, Ctrl+R, F12, Ctrl+Shift+I, etc.)
+    window.addEventListener('keydown', (e) => {
+      // Bloqueia recarregamento acidental (F5 / Ctrl+R / Ctrl+Shift+R)
+      if (e.key === 'F5' || (e.ctrlKey && (e.key === 'r' || e.key === 'R'))) {
+        e.preventDefault();
+        return;
+      }
+
+      // Bloqueia DevTools e atalhos de depuração (F12 / Ctrl+Shift+I / Ctrl+Shift+J)
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['i', 'I', 'j', 'J', 'c', 'C'].includes(e.key))) {
+        e.preventDefault();
+        return;
+      }
+
+      // Bloqueia exibição de código fonte (Ctrl+U)
+      if (e.ctrlKey && (e.key === 'u' || e.key === 'U')) {
+        e.preventDefault();
+      }
+    });
+  }
+
+  setupDesktopRestrictions();
+
+  // ========================================================
   // INICIALIZAÇÃO E AUTENTICAÇÃO
   // ========================================================
   async function init() {
+    await API.discoverServerUrl();
     currentUser = await API.getMe();
     if (currentUser) {
       showRoomView();
@@ -163,11 +216,60 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
+  // CONTROLE DO ESTADO DE CONEXÃO E BANNER OFFLINE
+  // ========================================================
+  let wasOffline = false;
+
+  function showOfflineBanner() {
+    if (serverOfflineBanner) {
+      serverOfflineBanner.style.display = 'block';
+    }
+    if (statusDot) {
+      statusDot.classList.remove('status-online');
+      statusDot.classList.add('status-offline');
+    }
+  }
+
+  function hideOfflineBanner() {
+    if (serverOfflineBanner) {
+      serverOfflineBanner.style.display = 'none';
+    }
+    if (statusDot) {
+      statusDot.classList.remove('status-offline');
+      statusDot.classList.add('status-online');
+    }
+  }
+
+  if (btnRetryConnection) {
+    btnRetryConnection.addEventListener('click', async () => {
+      btnRetryConnection.innerHTML = '<span>Localizando sinal...</span>';
+      btnRetryConnection.disabled = true;
+      try {
+        await API.discoverServerUrl();
+        if (socket) {
+          socket.disconnect();
+          connectSocket();
+        }
+      } catch (err) {
+        console.warn('Erro ao tentar reconectar:', err);
+      } finally {
+        setTimeout(() => {
+          btnRetryConnection.disabled = false;
+          btnRetryConnection.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>Reconectar</span>
+          `;
+        }, 1500);
+      }
+    });
+  }
+
+  // ========================================================
   // CONEXÃO SOCKET.IO E WEBRTC
   // ========================================================
   function connectSocket() {
     const token = API.getToken();
-    socket = io({
+    socket = io(API.getServerUrl(), {
       auth: { token },
       transports: ['websocket'], // Conexão persistente WebSocket pura (evita problemas de polling Anycast no Cloudflare)
       reconnection: true,
@@ -178,18 +280,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('connect', () => {
+      hideOfflineBanner();
       roomStatusText.textContent = 'Sala Única Conectada';
+      if (wasOffline) {
+        showNotice('🚀 Conexão restabelecida com a base estelar!', 'success');
+        wasOffline = false;
+      }
       console.log('✅ Conectado à sala única.');
     });
 
     socket.on('connect_error', (err) => {
       console.warn('Conexão Socket.io instável ou reconectando:', err.message);
-      roomStatusText.textContent = 'Reconectando...';
+      wasOffline = true;
+      roomStatusText.textContent = 'Sinal Perdido';
+      showOfflineBanner();
     });
 
     socket.on('disconnect', (reason) => {
       console.warn('Socket desconectado:', reason);
-      roomStatusText.textContent = 'Desconectado';
+      if (reason !== 'io client disconnect') {
+        wasOffline = true;
+        roomStatusText.textContent = 'Desconectado';
+        showOfflineBanner();
+      }
     });
 
     // Inicializa WebRTC com arquitetura de conexões direcionais dedicadas
@@ -536,7 +649,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (webrtc.isSharingScreen) {
       webrtc.stopScreenShare();
     } else {
-      await webrtc.startScreenShare(activePeers);
+      const ignored = getIgnoredExes();
+      await webrtc.startScreenShare(activePeers, ignored);
     }
   });
 
@@ -748,6 +862,224 @@ document.addEventListener('DOMContentLoaded', () => {
       createUserStatus.textContent = '❌ ' + err.message;
     }
   });
+
+  // ========================================================
+  // MODAL DE ISOLAMENTO DE ÁUDIO
+  // ========================================================
+  const IGNORED_AUDIO_KEY = 'stream_literal_ignored_audio_exes';
+
+  function getIgnoredExes() {
+    try {
+      const stored = localStorage.getItem(IGNORED_AUDIO_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch { }
+    // Padrão inteligente: Discord silenciado por padrão
+    return ['discord.exe'];
+  }
+
+  function saveIgnoredExes(list) {
+    const unique = Array.from(new Set(list.map(s => s.toLowerCase().trim()))).filter(Boolean);
+    localStorage.setItem(IGNORED_AUDIO_KEY, JSON.stringify(unique));
+  }
+
+  async function loadAudioApps() {
+    if (!audioAppsList) return;
+    audioAppsList.innerHTML = '<div class="loading-apps" style="padding:16px;text-align:center;color:var(--text-muted);font-size:0.85rem;">Escaneando processos ativos do Windows...</div>';
+
+    const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
+    const isTauri = typeof invoke === 'function';
+    const ignored = getIgnoredExes();
+
+    if (!isTauri) {
+      // Executando no navegador comum
+      let html = `
+        <div class="web-fallback-note">
+          <strong>🌐 Acesso via Navegador Web</strong><br>
+          A detecção em tempo real e isolamento nativo de canais de som do Windows é ativada usando o <strong>App Desktop da Stream Literal</strong>.
+          No navegador web, a transmissão de áudio usa o mixer padrão do sistema.
+        </div>
+      `;
+      html += '<div style="font-size:0.8rem;font-weight:600;margin-bottom:6px;color:var(--text-muted);">PROGRAMAS NA LISTA NEGRA SALVA:</div>';
+      ignored.forEach(exe => {
+        html += `
+          <div class="audio-app-item selected">
+            <input type="checkbox" checked data-exe="${escapeHtml(exe)}" id="chk-web-${escapeHtml(exe)}">
+            <div class="app-icon-badge ${exe.includes('discord') ? 'icon-discord' : 'icon-game'}">
+              ${exe.includes('discord') ? '💬' : '🎵'}
+            </div>
+            <div class="app-info-col">
+              <span class="app-info-name">${escapeHtml(exe)}</span>
+              <span class="app-info-exe">Regra salva permanentemente</span>
+            </div>
+            <span class="app-ignored-tag">Silenciado</span>
+          </div>
+        `;
+      });
+      audioAppsList.innerHTML = html;
+      return;
+    }
+
+    try {
+      const apps = await invoke('get_audio_apps');
+      renderAudioAppsList(apps, ignored);
+    } catch (err) {
+      audioAppsList.innerHTML = `<div style="padding:12px;color:var(--danger);font-size:0.85rem;">Erro ao listar aplicativos: ${err.message}</div>`;
+    }
+  }
+
+  function renderAudioAppsList(apps, ignored) {
+    audioAppsList.innerHTML = '';
+
+    const allExesMap = new Map();
+    apps.forEach(a => allExesMap.set(a.exe_name.toLowerCase(), a));
+
+    ignored.forEach(exe => {
+      const lower = exe.toLowerCase();
+      if (!allExesMap.has(lower)) {
+        allExesMap.set(lower, {
+          name: lower.includes('discord') ? 'Discord' : lower.includes('spotify') ? 'Spotify' : exe,
+          exe_name: exe,
+          icon_hint: lower.includes('discord') ? 'discord' : lower.includes('spotify') ? 'spotify' : 'app',
+          pid: 0
+        });
+      }
+    });
+
+    const mergedList = Array.from(allExesMap.values());
+    mergedList.sort((a, b) => {
+      const aIgnored = ignored.includes(a.exe_name.toLowerCase()) ? 0 : 1;
+      const bIgnored = ignored.includes(b.exe_name.toLowerCase()) ? 0 : 1;
+      return aIgnored - bIgnored || a.name.localeCompare(b.name);
+    });
+
+    mergedList.forEach(app => {
+      const isChecked = ignored.includes(app.exe_name.toLowerCase());
+      const item = document.createElement('div');
+      item.className = `audio-app-item ${isChecked ? 'selected' : ''}`;
+
+      let iconEmoji = '🎮';
+      if (app.icon_hint === 'discord') iconEmoji = '💬';
+      else if (app.icon_hint === 'spotify') iconEmoji = '🎵';
+      else if (app.icon_hint === 'browser') iconEmoji = '🌐';
+      else if (app.icon_hint === 'steam') iconEmoji = '🕹️';
+
+      item.innerHTML = `
+        <input type="checkbox" ${isChecked ? 'checked' : ''} data-exe="${escapeHtml(app.exe_name)}">
+        <div class="app-icon-badge icon-${app.icon_hint}">
+          ${iconEmoji}
+        </div>
+        <div class="app-info-col">
+          <span class="app-info-name">${escapeHtml(app.name)}</span>
+          <span class="app-info-exe">${escapeHtml(app.exe_name)} ${app.pid ? `(PID: ${app.pid})` : '(Fechado)'}</span>
+        </div>
+        ${isChecked ? '<span class="app-ignored-tag">Silenciado</span>' : ''}
+      `;
+
+      const chk = item.querySelector('input[type="checkbox"]');
+      item.addEventListener('click', (e) => {
+        if (e.target !== chk) {
+          chk.checked = !chk.checked;
+        }
+        item.classList.toggle('selected', chk.checked);
+        let tag = item.querySelector('.app-ignored-tag');
+        if (chk.checked && !tag) {
+          const span = document.createElement('span');
+          span.className = 'app-ignored-tag';
+          span.textContent = 'Silenciado';
+          item.appendChild(span);
+        } else if (!chk.checked && tag) {
+          tag.remove();
+        }
+      });
+
+      audioAppsList.appendChild(item);
+    });
+  }
+
+  if (btnAudioSettings) {
+    btnAudioSettings.addEventListener('click', () => {
+      audioSettingsModal.style.display = 'flex';
+      loadAudioApps();
+    });
+  }
+
+  if (btnCloseAudioModal) {
+    btnCloseAudioModal.addEventListener('click', () => {
+      audioSettingsModal.style.display = 'none';
+    });
+  }
+
+  if (audioSettingsModal) {
+    audioSettingsModal.addEventListener('click', (e) => {
+      if (e.target === audioSettingsModal) {
+        audioSettingsModal.style.display = 'none';
+      }
+    });
+  }
+
+  if (btnRefreshAudioApps) {
+    btnRefreshAudioApps.addEventListener('click', () => {
+      loadAudioApps();
+    });
+  }
+
+  if (btnAddCustomExe && customExeInput) {
+    customExeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        btnAddCustomExe.click();
+      }
+    });
+
+    btnAddCustomExe.addEventListener('click', () => {
+      let val = customExeInput.value.trim().toLowerCase();
+      if (!val) return;
+      if (!val.endsWith('.exe')) val += '.exe';
+      const current = getIgnoredExes();
+      if (!current.includes(val)) {
+        current.push(val);
+        saveIgnoredExes(current);
+      }
+      customExeInput.value = '';
+      loadAudioApps();
+    });
+  }
+
+  if (btnSaveAudioSettings) {
+    btnSaveAudioSettings.addEventListener('click', async () => {
+      const checkboxes = audioAppsList.querySelectorAll('input[type="checkbox"]');
+      const selected = [];
+      checkboxes.forEach(c => {
+        if (c.checked && c.dataset.exe) {
+          selected.push(c.dataset.exe.toLowerCase());
+        }
+      });
+      saveIgnoredExes(selected);
+      audioSettingsStatus.className = 'status-msg success';
+      audioSettingsStatus.textContent = '✅ Configurações salvas permanentemente!';
+
+      // Se estiver transmitindo ativamente no desktop, atualiza o filtro nativo em tempo real
+      if (webrtc && webrtc.isSharingScreen && window.AudioBridge?.isCapturing) {
+        try {
+          const res = await window.AudioBridge.updateExclusions(selected, true);
+          if (res?.target_exe) {
+            showNotice(`Filtro atualizado em tempo real! "${res.target_exe}" está silenciado.`, 'info');
+          } else {
+            showNotice('Filtro atualizado em tempo real! Capturando som do sistema.', 'info');
+          }
+        } catch (err) {
+          console.warn('Erro ao atualizar exclusão mid-stream:', err);
+        }
+      } else {
+        showNotice('Filtro de áudio atualizado! Sons selecionados serão ignorados.', 'info');
+      }
+
+      setTimeout(() => {
+        audioSettingsStatus.textContent = '';
+        audioSettingsModal.style.display = 'none';
+      }, 1200);
+    });
+  }
 
   function escapeHtml(str) {
     if (!str) return '';
