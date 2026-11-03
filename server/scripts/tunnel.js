@@ -94,7 +94,7 @@ async function startTunnel() {
   console.log(`🌐 [STREAM LITERAL] Iniciando túnel seguro para a porta ${PORT}...`);
   console.log('======================================================\n');
 
-  const tunnelProcess = spawn(executable, ['tunnel', '--url', `http://localhost:${PORT}`], {
+  const tunnelProcess = spawn(executable, ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${PORT}`], {
     stdio: ['inherit', 'pipe', 'pipe']
   });
 

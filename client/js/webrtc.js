@@ -4,12 +4,13 @@
  */
 
 class WebRTCManager {
-  constructor(socket, currentUser, onStreamAdded, onStreamRemoved, onStreamingStateChanged) {
+  constructor(socket, currentUser, onStreamAdded, onStreamRemoved, onStreamingStateChanged, onNotice) {
     this.socket = socket;
     this.currentUser = currentUser;
     this.onStreamAdded = onStreamAdded;             // callback(peerId, stream, user)
     this.onStreamRemoved = onStreamRemoved;         // callback(peerId)
     this.onStreamingStateChanged = onStreamingStateChanged; // callback(isSharing)
+    this.onNotice = onNotice;                       // callback(message, type)
 
     this.localStream = null;
     this.isSharingScreen = false;
@@ -86,50 +87,86 @@ class WebRTCManager {
   // ========================================================
 
   async startScreenShare(existingPeers = []) {
+    let capturedStream = null;
+    let audioFailed = false;
+
+    // Tentativa 1: Captura de tela com áudio (compatível com Windows/Chrome WASAPI)
     try {
-      this.localStream = await navigator.mediaDevices.getDisplayMedia({
+      capturedStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           cursor: 'always',
           frameRate: { ideal: 30, max: 60 }
         },
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
-        }
+        audio: true
       });
-
-      this.isSharingScreen = true;
-      this.onStreamingStateChanged(true);
-
-      // Listener para quando o usuário clicar em "Interromper compartilhamento" na barra nativa do navegador
-      const videoTrack = this.localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.onended = () => {
-          this.stopScreenShare();
-        };
-      }
-
-      // Notifica o servidor de sinalização
-      this.socket.emit('start-stream');
-
-      // Exibe a própria tela imediatamente na UI local (miniatura e destaque)
-      this.onStreamAdded(this.socket.id, this.localStream, this.currentUser);
-
-      // Envia nossa transmissão para todos os outros membros conectados
-      existingPeers.forEach((peer) => {
-        if (peer.socketId !== this.socket.id) {
-          this.createSendConnection(peer.socketId);
-        }
-      });
-
-      return true;
     } catch (err) {
-      console.warn('Compartilhamento cancelado ou não permitido:', err);
+      // Se falhou devido a dispositivo de áudio (NotReadableError, OverconstrainedError ou permissão de áudio)
+      if (err.name === 'NotReadableError' || err.name === 'OverconstrainedError' || (err.message && err.message.toLowerCase().includes('audio'))) {
+        console.warn('⚠️ Não foi possível capturar o áudio do sistema nessa janela/dispositivo. Tentando fallback sem áudio...', err);
+        audioFailed = true;
+
+        try {
+          capturedStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              cursor: 'always',
+              frameRate: { ideal: 30, max: 60 }
+            },
+            audio: false
+          });
+        } catch (fallbackErr) {
+          console.warn('Compartilhamento cancelado pelo usuário:', fallbackErr);
+          this.isSharingScreen = false;
+          this.onStreamingStateChanged(false);
+          return false;
+        }
+      } else {
+        console.warn('Compartilhamento cancelado pelo usuário ou não permitido:', err);
+        this.isSharingScreen = false;
+        this.onStreamingStateChanged(false);
+        return false;
+      }
+    }
+
+    if (!capturedStream) {
       this.isSharingScreen = false;
       this.onStreamingStateChanged(false);
       return false;
     }
+
+    this.localStream = capturedStream;
+    this.isSharingScreen = true;
+    this.onStreamingStateChanged(true);
+
+    const hasAudioTrack = this.localStream.getAudioTracks().length > 0;
+    if (audioFailed || !hasAudioTrack) {
+      console.log('ℹ️ Transmissão iniciada apenas com vídeo.');
+      if (this.onNotice) {
+        this.onNotice('Transmissão iniciada sem som. Para transmitir áudio, escolha "Tela Inteira" ou uma "Aba do Chrome".', 'warning');
+      }
+    }
+
+    // Listener para quando o usuário clicar em "Interromper compartilhamento" na barra nativa do navegador
+    const videoTrack = this.localStream.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.onended = () => {
+        this.stopScreenShare();
+      };
+    }
+
+    // Notifica o servidor de sinalização
+    this.socket.emit('start-stream');
+
+    // Exibe a própria tela imediatamente na UI local (miniatura e destaque)
+    this.onStreamAdded(this.socket.id, this.localStream, this.currentUser);
+
+    // Envia nossa transmissão para todos os outros membros conectados
+    existingPeers.forEach((peer) => {
+      if (peer.socketId !== this.socket.id) {
+        this.createSendConnection(peer.socketId);
+      }
+    });
+
+    return true;
   }
 
   // Cria uma conexão de ENVIO dedicada para um espectador específico

@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const spotlightAudioIndicator = document.getElementById('spotlight-audio-indicator');
   
   // Controles de Mídia do Spotlight
+  const spotlightControls = document.getElementById('spotlight-controls');
   const btnSpotlightMute = document.getElementById('btn-spotlight-mute');
   const iconVolumeHigh = document.getElementById('icon-volume-high');
   const iconVolumeMuted = document.getElementById('icon-volume-muted');
@@ -139,6 +140,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Função para exibir alertas e avisos visuais no topo
+  function showNotice(message, type = 'info') {
+    const existing = document.getElementById('app-toast-notice');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'app-toast-notice';
+    toast.className = `toast-notice toast-${type}`;
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('toast-show');
+    }, 10);
+
+    setTimeout(() => {
+      toast.classList.remove('toast-show');
+      setTimeout(() => toast.remove(), 350);
+    }, 6000);
+  }
+
   // ========================================================
   // CONEXÃO SOCKET.IO E WEBRTC
   // ========================================================
@@ -146,7 +169,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = API.getToken();
     socket = io({
       auth: { token },
-      transports: ['websocket', 'polling']
+      transports: ['websocket'], // Conexão persistente WebSocket pura (evita problemas de polling Anycast no Cloudflare)
+      reconnection: true,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000
     });
 
     socket.on('connect', () => {
@@ -155,11 +183,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('connect_error', (err) => {
-      console.error('Erro no socket:', err.message);
-      roomStatusText.textContent = 'Erro de conexão';
+      console.warn('Conexão Socket.io instável ou reconectando:', err.message);
+      roomStatusText.textContent = 'Reconectando...';
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      console.warn('Socket desconectado:', reason);
       roomStatusText.textContent = 'Desconectado';
     });
 
@@ -169,7 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
       currentUser,
       handleStreamAdded,
       handleStreamRemoved,
-      handleStreamingStateChanged
+      handleStreamingStateChanged,
+      showNotice
     );
 
     // Estado inicial da sala recebido do servidor
@@ -302,6 +332,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     const currentThumb = document.getElementById(`thumb-${peerId}`);
     if (currentThumb) currentThumb.classList.add('active-pin');
+
+    // Exibe brevemente os controles ao fixar uma stream
+    showControls();
   }
 
   function resetSpotlight() {
@@ -443,6 +476,55 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // ========================================================
+  // CONTROLE AUTOMÁTICO DE VISIBILIDADE (AUTO-HIDE HOVER/IDLE)
+  // ========================================================
+  let hideControlsTimer = null;
+  const INACTIVITY_DELAY = 2500; // 2,5 segundos
+
+  function showControls() {
+    spotlightPlayerWrapper.classList.add('user-active');
+    spotlightPlayerWrapper.classList.remove('hide-cursor');
+
+    clearTimeout(hideControlsTimer);
+    hideControlsTimer = setTimeout(() => {
+      // Se o usuário estiver interagindo (mouse em cima dos controles ou arrastando o slider), mantém visível
+      if (
+        document.activeElement === spotlightVolumeSlider ||
+        spotlightControls.matches(':hover') ||
+        spotlightControls.classList.contains('interacting')
+      ) {
+        return;
+      }
+      spotlightPlayerWrapper.classList.remove('user-active');
+      if (document.fullscreenElement) {
+        spotlightPlayerWrapper.classList.add('hide-cursor');
+      }
+    }, INACTIVITY_DELAY);
+  }
+
+  function hideControlsImmediately() {
+    clearTimeout(hideControlsTimer);
+    if (!spotlightControls.matches(':hover') && !spotlightControls.classList.contains('interacting')) {
+      spotlightPlayerWrapper.classList.remove('user-active');
+      spotlightPlayerWrapper.classList.remove('hide-cursor');
+    }
+  }
+
+  spotlightPlayerWrapper.addEventListener('mousemove', showControls);
+  spotlightPlayerWrapper.addEventListener('mouseenter', showControls);
+  spotlightPlayerWrapper.addEventListener('mouseleave', hideControlsImmediately);
+  spotlightPlayerWrapper.addEventListener('click', showControls);
+
+  // Evita esconder enquanto o usuário estiver arrastando a barra de volume
+  spotlightVolumeSlider.addEventListener('mousedown', () => {
+    spotlightControls.classList.add('interacting');
+  });
+  window.addEventListener('mouseup', () => {
+    spotlightControls.classList.remove('interacting');
+    showControls();
+  });
 
   // ========================================================
   // CONTROLE DE COMPARTILHAMENTO DE TELA
