@@ -6,16 +6,25 @@ const API = {
   TOKEN_KEY: 'stream_literal_auth_token',
   SERVER_URL_KEY: 'stream_literal_server_url',
 
+  isDesktopApp() {
+    return typeof window.__TAURI__ !== 'undefined'
+      || typeof window.__TAURI_INTERNALS__ !== 'undefined'
+      || window.location.protocol === 'tauri:'
+      || window.location.protocol === 'file:'
+      || window.location.hostname === 'tauri.localhost'
+      || (window.location.hostname === 'localhost' && window.location.port !== '3000');
+  },
+
   getServerUrl() {
     const saved = localStorage.getItem(this.SERVER_URL_KEY);
     if (saved && saved.trim()) return saved.trim().replace(/\/+$/, '');
     
-    // Se estiver rodando dentro do Tauri ou file protocol, usa o padrão localhost
-    if (window.location.protocol === 'tauri:' || window.location.protocol === 'file:' || window.location.hostname === 'tauri.localhost') {
+    // Se estiver no App Desktop, a base do servidor local padrão é a porta 3000
+    if (this.isDesktopApp()) {
       return 'http://127.0.0.1:3000';
     }
     
-    // No navegador comum, usa a própria origem (ex: link do túnel ou localhost)
+    // No navegador comum (acesso direto ou via Cloudflare Tunnel)
     return window.location.origin;
   },
 
@@ -55,6 +64,10 @@ const API = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('🛰️ Houston, nós temos um problema! A base estelar da Stream Literal está offline no momento (ou o Tales tropeçou no cabo de força 🔌🪐). Inicie o servidor para fazer login!');
+      }
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Erro ao efetuar login.');
@@ -62,8 +75,8 @@ const API = {
       this.setToken(data.token);
       return data;
     } catch (err) {
-      if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
-        throw new Error('🛰️ Houston, nós temos um problema! A base estelar da Stream Literal está offline no momento (ou o Tales tropeçou no cabo de força 🔌🪐). Verifique se o servidor está ativo!');
+      if (err.name === 'SyntaxError' || err.name === 'TypeError' || err.message.includes('JSON') || err.message.includes('fetch') || err.message.includes('NetworkError')) {
+        throw new Error('🛰️ Houston, nós temos um problema! A base estelar da Stream Literal está offline no momento (ou o Tales tropeçou no cabo de força 🔌🪐). Inicie o servidor para fazer login!');
       }
       throw err;
     }
@@ -77,6 +90,10 @@ const API = {
       const res = await fetch(`${this.getServerUrl()}/api/auth/me`, {
         headers: this.getHeaders()
       });
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        return null;
+      }
       if (!res.ok) {
         this.removeToken();
         return null;
