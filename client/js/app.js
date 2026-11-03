@@ -621,7 +621,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (webrtc.isSharingScreen) {
       webrtc.stopScreenShare();
     } else {
-      await webrtc.startScreenShare(activePeers);
+      const ignored = getIgnoredExes();
+      await webrtc.startScreenShare(activePeers, ignored);
     }
   });
 
@@ -1017,7 +1018,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (btnSaveAudioSettings) {
-    btnSaveAudioSettings.addEventListener('click', () => {
+    btnSaveAudioSettings.addEventListener('click', async () => {
       const checkboxes = audioAppsList.querySelectorAll('input[type="checkbox"]');
       const selected = [];
       checkboxes.forEach(c => {
@@ -1028,7 +1029,23 @@ document.addEventListener('DOMContentLoaded', () => {
       saveIgnoredExes(selected);
       audioSettingsStatus.className = 'status-msg success';
       audioSettingsStatus.textContent = '✅ Configurações salvas permanentemente!';
-      showNotice('Filtro de áudio atualizado! Sons selecionados serão ignorados.', 'info');
+
+      // Se estiver transmitindo ativamente no desktop, atualiza o filtro nativo em tempo real
+      if (webrtc && webrtc.isSharingScreen && window.AudioBridge?.isCapturing) {
+        try {
+          const res = await window.AudioBridge.updateExclusions(selected, true);
+          if (res?.target_exe) {
+            showNotice(`Filtro atualizado em tempo real! "${res.target_exe}" está silenciado.`, 'info');
+          } else {
+            showNotice('Filtro atualizado em tempo real! Capturando som do sistema.', 'info');
+          }
+        } catch (err) {
+          console.warn('Erro ao atualizar exclusão mid-stream:', err);
+        }
+      } else {
+        showNotice('Filtro de áudio atualizado! Sons selecionados serão ignorados.', 'info');
+      }
+
       setTimeout(() => {
         audioSettingsStatus.textContent = '';
         audioSettingsModal.style.display = 'none';

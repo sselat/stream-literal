@@ -6,6 +6,17 @@ use windows::Win32::System::Com::*;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Diagnostics::ToolHelp::*;
 
+#[allow(unused_imports)]
+use windows::Win32::Media::Audio::{
+    AUDIOCLIENT_ACTIVATION_PARAMS,
+    AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
+    PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
+    PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE,
+    ActivateAudioInterfaceAsync,
+    IActivateAudioInterfaceAsyncOperation,
+    IActivateAudioInterfaceCompletionHandler,
+};
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AudioAppInfo {
     pub pid: u32,
@@ -13,6 +24,61 @@ pub struct AudioAppInfo {
     pub exe_name: String,
     pub window_title: String,
     pub icon_hint: String,
+}
+
+pub fn find_root_pid_for_exe(exe_name: &str) -> Option<u32> {
+    let lower_target = exe_name.to_lowercase();
+    let lower_target = lower_target.trim();
+
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok()?;
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+
+        let mut matching_processes: Vec<(u32, u32)> = Vec::new(); // (pid, parent_pid)
+
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                let null_pos = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                let cur_exe = String::from_utf16_lossy(&entry.szExeFile[..null_pos]).to_lowercase();
+
+                if cur_exe == lower_target || (lower_target.ends_with(".exe") && cur_exe == lower_target) {
+                    matching_processes.push((entry.th32ProcessID, entry.th32ParentProcessID));
+                }
+
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+
+        if matching_processes.is_empty() {
+            return None;
+        }
+
+        let pids_set: HashSet<u32> = matching_processes.iter().map(|(p, _)| *p).collect();
+
+        // Encontra o processo raiz do executável: aquele cujo pai não é um processo do mesmo executável
+        for &(pid, parent_pid) in &matching_processes {
+            if !pids_set.contains(&parent_pid) {
+                return Some(pid);
+            }
+        }
+
+        Some(matching_processes[0].0)
+    }
+}
+
+pub fn find_first_active_target(exes: &[String]) -> Option<(String, u32)> {
+    for exe in exes {
+        if let Some(pid) = find_root_pid_for_exe(exe) {
+            return Some((exe.clone(), pid));
+        }
+    }
+    None
 }
 
 pub fn get_audio_session_pids() -> HashSet<u32> {

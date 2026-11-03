@@ -86,44 +86,82 @@ class WebRTCManager {
   // TRANSMISSÃO (PRODUTOR / SENDER)
   // ========================================================
 
-  async startScreenShare(existingPeers = []) {
+  async startScreenShare(existingPeers = [], ignoredExes = ['discord.exe']) {
     let capturedStream = null;
     let audioFailed = false;
 
-    // Tentativa 1: Captura de tela com áudio (compatível com Windows/Chrome WASAPI)
-    try {
-      capturedStream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          cursor: 'always',
-          frameRate: { ideal: 30, max: 60 }
-        },
-        audio: true
-      });
-    } catch (err) {
-      // Se falhou devido a dispositivo de áudio (NotReadableError, OverconstrainedError ou permissão de áudio)
-      if (err.name === 'NotReadableError' || err.name === 'OverconstrainedError' || (err.message && err.message.toLowerCase().includes('audio'))) {
-        console.warn('⚠️ Não foi possível capturar o áudio do sistema nessa janela/dispositivo. Tentando fallback sem áudio...', err);
-        audioFailed = true;
+    const isDesktop = typeof API !== 'undefined' && API.isDesktopApp() && window.AudioBridge?.isSupported();
 
-        try {
-          capturedStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-              cursor: 'always',
-              frameRate: { ideal: 30, max: 60 }
-            },
-            audio: false
-          });
-        } catch (fallbackErr) {
-          console.warn('Compartilhamento cancelado pelo usuário:', fallbackErr);
+    if (isDesktop) {
+      // 1. App Desktop Tauri:
+      // Captura de tela com vídeo limpo via getDisplayMedia. O áudio do sistema será capturado
+      // de forma isolada e profissional diretamente pelo Rust através do WASAPI Loopback.
+      try {
+        capturedStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            cursor: 'always',
+            frameRate: { ideal: 30, max: 60 }
+          },
+          audio: false
+        });
+      } catch (err) {
+        console.warn('Compartilhamento cancelado pelo usuário:', err);
+        this.isSharingScreen = false;
+        this.onStreamingStateChanged(false);
+        return false;
+      }
+
+      if (!capturedStream) return false;
+
+      // 2. Inicia o pipeline de áudio nativo em Rust com exclusão de processos (Discord etc)
+      try {
+        const { track, info } = await window.AudioBridge.start(ignoredExes, true);
+        if (track) {
+          capturedStream.addTrack(track);
+          console.log('🎉 Áudio nativo isolado acoplado à transmissão:', info);
+          if (this.onNotice && info?.target_exe) {
+            this.onNotice(`Transmissão iniciada! Áudio de "${info.target_exe}" isolado com sucesso.`, 'info');
+          }
+        }
+      } catch (audioErr) {
+        console.warn('⚠️ Não foi possível iniciar captura nativa de áudio:', audioErr);
+        audioFailed = true;
+      }
+    } else {
+      // Navegador Web Comum (Viewer ou streamer via browser)
+      try {
+        capturedStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            cursor: 'always',
+            frameRate: { ideal: 30, max: 60 }
+          },
+          audio: true
+        });
+      } catch (err) {
+        if (err.name === 'NotReadableError' || err.name === 'OverconstrainedError' || (err.message && err.message.toLowerCase().includes('audio'))) {
+          console.warn('⚠️ Não foi possível capturar o áudio do sistema nessa janela/dispositivo. Tentando fallback sem áudio...', err);
+          audioFailed = true;
+
+          try {
+            capturedStream = await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                cursor: 'always',
+                frameRate: { ideal: 30, max: 60 }
+              },
+              audio: false
+            });
+          } catch (fallbackErr) {
+            console.warn('Compartilhamento cancelado pelo usuário:', fallbackErr);
+            this.isSharingScreen = false;
+            this.onStreamingStateChanged(false);
+            return false;
+          }
+        } else {
+          console.warn('Compartilhamento cancelado pelo usuário ou não permitido:', err);
           this.isSharingScreen = false;
           this.onStreamingStateChanged(false);
           return false;
         }
-      } else {
-        console.warn('Compartilhamento cancelado pelo usuário ou não permitido:', err);
-        this.isSharingScreen = false;
-        this.onStreamingStateChanged(false);
-        return false;
       }
     }
 
@@ -328,6 +366,10 @@ class WebRTCManager {
   // ========================================================
 
   stopScreenShare() {
+    if (window.AudioBridge?.isCapturing) {
+      window.AudioBridge.stop();
+    }
+
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;
