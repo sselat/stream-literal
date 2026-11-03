@@ -1,0 +1,10 @@
+# Configurações de publicação do Portal Estelar no Netlify
+
+[build]
+  publish = "docs"
+
+# Garante que os navegadores sempre consultem o arquivo mais recente sem cache obsoleto
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
