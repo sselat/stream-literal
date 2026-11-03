@@ -1,7 +1,9 @@
+require('dotenv').config();
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { updateDiscoveryUrl } = require('./discovery');
 
 const PORT = process.env.PORT || 3000;
 const BIN_DIR = path.join(__dirname, '..', '..', 'bin');
@@ -98,14 +100,34 @@ async function startTunnel() {
     stdio: ['inherit', 'pipe', 'pipe']
   });
 
-  const extractUrl = (text) => {
+  let lastDiscoveredUrl = null;
+
+  const extractUrl = async (text) => {
     const match = text.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
-    if (match) {
+    if (match && match[0] !== lastDiscoveredUrl) {
+      lastDiscoveredUrl = match[0];
+      const url = match[0];
+
       console.log('\n------------------------------------------------------');
       console.log('🚀 SEU LINK PÚBLICO E SEGURO (HTTPS) ESTÁ PRONTO:');
-      console.log(`🔗  \x1b[32m\x1b[1m${match[0]}\x1b[0m`);
+      console.log(`🔗  \x1b[32m\x1b[1m${url}\x1b[0m`);
       console.log('------------------------------------------------------');
-      console.log('Envie esse link para seus amigos acessarem e compartilharem tela!\n');
+
+      // Publicação automática de Service Discovery no GitHub Gist
+      const discRes = await updateDiscoveryUrl(url);
+      if (discRes.success) {
+        console.log('📡 [Service Discovery] Publicado com sucesso no GitHub Gist!');
+        console.log(`   ID do Gist: \x1b[36m${discRes.gistId}\x1b[0m`);
+        console.log('   O app desktop e a página de entrada agora conectam automaticamente!');
+      } else if (discRes.reason === 'TOKEN_MISSING') {
+        console.log('\n💡 [Conexão Automática Opcional]');
+        console.log('   Para que seus amigos e o app desktop conectem sozinhos sem copiar links:');
+        console.log('   Adicione um token do GitHub no seu arquivo .env:');
+        console.log('   DISCOVERY_GITHUB_TOKEN=seu_token_aqui\n');
+      } else {
+        console.warn(`⚠️ [Service Discovery] Falha ao publicar no Gist: ${discRes.reason}`);
+      }
+      console.log('------------------------------------------------------\n');
     }
   };
 

@@ -37,6 +37,11 @@ app.use(express.urlencoded({ extended: true }));
 const clientPath = path.join(__dirname, '..', 'client');
 app.use(express.static(clientPath));
 
+// Health check endpoint para ping e auto-descoberta
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, name: 'stream-literal', timestamp: Date.now() });
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', authRoutes);

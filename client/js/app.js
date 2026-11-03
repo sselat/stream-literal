@@ -9,9 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('login-form');
   const loginError = document.getElementById('login-error');
   const btnLogin = document.getElementById('btn-login');
-  const btnToggleServerConfig = document.getElementById('btn-toggle-server-config');
-  const serverConfigPanel = document.getElementById('server-config-panel');
-  const serverUrlInput = document.getElementById('server-url-input');
 
   // Elementos do Top Nav
   const roomStatusText = document.getElementById('room-status-text');
@@ -91,22 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========================================================
   // INICIALIZAÇÃO E AUTENTICAÇÃO
   // ========================================================
-  if (serverUrlInput) {
-    const currentCustomUrl = localStorage.getItem(API.SERVER_URL_KEY) || '';
-    serverUrlInput.value = currentCustomUrl;
-    serverUrlInput.addEventListener('change', () => {
-      API.setServerUrl(serverUrlInput.value);
-    });
-  }
-
-  if (btnToggleServerConfig && serverConfigPanel) {
-    btnToggleServerConfig.addEventListener('click', () => {
-      const isHidden = serverConfigPanel.style.display === 'none';
-      serverConfigPanel.style.display = isHidden ? 'block' : 'none';
-    });
-  }
-
   async function init() {
+    await API.discoverServerUrl();
     currentUser = await API.getMe();
     if (currentUser) {
       showRoomView();
@@ -220,19 +203,26 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (btnRetryConnection) {
-    btnRetryConnection.addEventListener('click', () => {
-      btnRetryConnection.innerHTML = '<span>Reconectando...</span>';
+    btnRetryConnection.addEventListener('click', async () => {
+      btnRetryConnection.innerHTML = '<span>Localizando sinal...</span>';
       btnRetryConnection.disabled = true;
-      if (socket) {
-        socket.connect();
+      try {
+        await API.discoverServerUrl();
+        if (socket) {
+          socket.disconnect();
+          connectSocket();
+        }
+      } catch (err) {
+        console.warn('Erro ao tentar reconectar:', err);
+      } finally {
+        setTimeout(() => {
+          btnRetryConnection.disabled = false;
+          btnRetryConnection.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>Reconectar</span>
+          `;
+        }, 1500);
       }
-      setTimeout(() => {
-        btnRetryConnection.disabled = false;
-        btnRetryConnection.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-          <span>Reconectar</span>
-        `;
-      }, 1500);
     });
   }
 
