@@ -9,9 +9,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('login-form');
   const loginError = document.getElementById('login-error');
   const btnLogin = document.getElementById('btn-login');
+  const btnToggleServerConfig = document.getElementById('btn-toggle-server-config');
+  const serverConfigPanel = document.getElementById('server-config-panel');
+  const serverUrlInput = document.getElementById('server-url-input');
 
   // Elementos do Top Nav
   const roomStatusText = document.getElementById('room-status-text');
+  const statusDot = document.querySelector('.status-dot');
+  const serverOfflineBanner = document.getElementById('server-offline-banner');
+  const btnRetryConnection = document.getElementById('btn-retry-connection');
   const userAvatarInitials = document.getElementById('user-avatar-initials');
   const userDisplayName = document.getElementById('user-display-name');
   const userRoleBadge = document.getElementById('user-role-badge');
@@ -74,6 +80,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========================================================
   // INICIALIZAÇÃO E AUTENTICAÇÃO
   // ========================================================
+  if (serverUrlInput) {
+    const currentCustomUrl = localStorage.getItem(API.SERVER_URL_KEY) || '';
+    serverUrlInput.value = currentCustomUrl;
+    serverUrlInput.addEventListener('change', () => {
+      API.setServerUrl(serverUrlInput.value);
+    });
+  }
+
+  if (btnToggleServerConfig && serverConfigPanel) {
+    btnToggleServerConfig.addEventListener('click', () => {
+      const isHidden = serverConfigPanel.style.display === 'none';
+      serverConfigPanel.style.display = isHidden ? 'block' : 'none';
+    });
+  }
+
   async function init() {
     currentUser = await API.getMe();
     if (currentUser) {
@@ -163,11 +184,53 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
+  // CONTROLE DO ESTADO DE CONEXÃO E BANNER OFFLINE
+  // ========================================================
+  let wasOffline = false;
+
+  function showOfflineBanner() {
+    if (serverOfflineBanner) {
+      serverOfflineBanner.style.display = 'block';
+    }
+    if (statusDot) {
+      statusDot.classList.remove('status-online');
+      statusDot.classList.add('status-offline');
+    }
+  }
+
+  function hideOfflineBanner() {
+    if (serverOfflineBanner) {
+      serverOfflineBanner.style.display = 'none';
+    }
+    if (statusDot) {
+      statusDot.classList.remove('status-offline');
+      statusDot.classList.add('status-online');
+    }
+  }
+
+  if (btnRetryConnection) {
+    btnRetryConnection.addEventListener('click', () => {
+      btnRetryConnection.innerHTML = '<span>Reconectando...</span>';
+      btnRetryConnection.disabled = true;
+      if (socket) {
+        socket.connect();
+      }
+      setTimeout(() => {
+        btnRetryConnection.disabled = false;
+        btnRetryConnection.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Reconectar</span>
+        `;
+      }, 1500);
+    });
+  }
+
+  // ========================================================
   // CONEXÃO SOCKET.IO E WEBRTC
   // ========================================================
   function connectSocket() {
     const token = API.getToken();
-    socket = io({
+    socket = io(API.getServerUrl(), {
       auth: { token },
       transports: ['websocket'], // Conexão persistente WebSocket pura (evita problemas de polling Anycast no Cloudflare)
       reconnection: true,
@@ -178,18 +241,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('connect', () => {
+      hideOfflineBanner();
       roomStatusText.textContent = 'Sala Única Conectada';
+      if (wasOffline) {
+        showNotice('🚀 Conexão restabelecida com a base estelar!', 'success');
+        wasOffline = false;
+      }
       console.log('✅ Conectado à sala única.');
     });
 
     socket.on('connect_error', (err) => {
       console.warn('Conexão Socket.io instável ou reconectando:', err.message);
-      roomStatusText.textContent = 'Reconectando...';
+      wasOffline = true;
+      roomStatusText.textContent = 'Sinal Perdido';
+      showOfflineBanner();
     });
 
     socket.on('disconnect', (reason) => {
       console.warn('Socket desconectado:', reason);
-      roomStatusText.textContent = 'Desconectado';
+      if (reason !== 'io client disconnect') {
+        wasOffline = true;
+        roomStatusText.textContent = 'Desconectado';
+        showOfflineBanner();
+      }
     });
 
     // Inicializa WebRTC com arquitetura de conexões direcionais dedicadas

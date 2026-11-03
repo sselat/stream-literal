@@ -4,12 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stream Literal — Compartilhamento de Tela Privado</title>
+  <link rel="icon" type="image/png" href="assets/logo.png">
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Socket.io client -->
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Socket.io client local bundle -->
+  <script src="js/socket.io.min.js"></script>
 </head>
 <body class="dark-theme">
 
@@ -17,12 +18,8 @@
   <div id="login-container" class="auth-wrapper">
     <div class="auth-card">
       <div class="brand-header">
-        <div class="brand-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-            <line x1="8" y1="21" x2="16" y2="21"></line>
-            <line x1="12" y1="17" x2="12" y2="21"></line>
-          </svg>
+        <div class="brand-logo-wrapper">
+          <img src="assets/logo.png" alt="Stream Literal Logo" class="brand-logo-img">
         </div>
         <h1>Stream Literal</h1>
         <p>Compartilhamento de tela e áudio em tempo real</p>
@@ -44,6 +41,21 @@
         <button type="submit" id="btn-login" class="btn btn-primary btn-block">
           <span>Entrar na Sala</span>
         </button>
+
+        <div class="server-config-toggle">
+          <button type="button" id="btn-toggle-server-config" class="link-btn-text">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>Configurar Conexão do Servidor</span>
+          </button>
+        </div>
+
+        <div id="server-config-panel" class="server-config-panel" style="display: none;">
+          <div class="input-group">
+            <label for="server-url-input">Endereço da Base / Servidor</label>
+            <input type="text" id="server-url-input" placeholder="http://127.0.0.1:3000 ou link do túnel">
+            <small class="helper-text">Deixe em branco para conexão automática padrão</small>
+          </div>
+        </div>
       </form>
 
       <div class="auth-footer">
@@ -59,11 +71,7 @@
     <header class="top-nav">
       <div class="nav-left">
         <div class="logo-badge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-            <line x1="8" y1="21" x2="16" y2="21"></line>
-            <line x1="12" y1="17" x2="12" y2="21"></line>
-          </svg>
+          <img src="assets/logo.png" alt="Stream Literal Logo" class="nav-logo-img">
           <span class="brand-title">Stream Literal</span>
         </div>
         <div class="room-indicator">
@@ -96,6 +104,23 @@
         </button>
       </div>
     </header>
+
+    <!-- Banner de Servidor Offline -->
+    <div id="server-offline-banner" class="offline-banner" style="display: none;">
+      <div class="offline-content">
+        <div class="offline-beacon">
+          <span class="offline-icon">🛰️</span>
+        </div>
+        <div class="offline-texts">
+          <div class="offline-title">Houston, nós temos um problema!</div>
+          <div class="offline-desc">A base estelar da Stream Literal está fora de órbita (ou o Tales tropeçou no cabo de força 🔌🪐). Tentando restabelecer contato...</div>
+        </div>
+        <button type="button" id="btn-retry-connection" class="btn btn-secondary btn-sm offline-retry-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Reconectar</span>
+        </button>
+      </div>
+    </div>
 
     <!-- Espaço Principal de Trabalho -->
     <main class="main-stage">
