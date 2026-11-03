@@ -4,8 +4,9 @@
   "description": "Stream Literal - Compartilhamento de tela e áudio minimalista para pequenos grupos",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node server/index.js",
+    "start": "node server/launcher.js",
+    "server": "node server/index.js",
+    "dev": "node server/launcher.js",
     "create-user": "node server/scripts/create-user.js",
     "users": "node server/scripts/manage-users.js",
     "manage-users": "node server/scripts/manage-users.js",

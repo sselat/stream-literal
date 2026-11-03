@@ -73,7 +73,8 @@ function downloadFile(url, destPath) {
   });
 }
 
-async function startTunnel() {
+async function startTunnel(portOverride) {
+  const targetPort = portOverride || PORT;
   let executable = 'cloudflared';
 
   // 1. Verifica se já está instalado no PATH do Windows
@@ -93,10 +94,10 @@ async function startTunnel() {
   }
 
   console.log('\n======================================================');
-  console.log(`🌐 [STREAM LITERAL] Iniciando túnel seguro para a porta ${PORT}...`);
+  console.log(`🌐 [STREAM LITERAL] Conectando túnel seguro para a porta ${targetPort}...`);
   console.log('======================================================\n');
 
-  const tunnelProcess = spawn(executable, ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${PORT}`], {
+  const tunnelProcess = spawn(executable, ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${targetPort}`], {
     stdio: ['inherit', 'pipe', 'pipe']
   });
 
@@ -147,6 +148,12 @@ async function startTunnel() {
   tunnelProcess.on('close', (code) => {
     console.log(`\n🛑 Túnel encerrado (código ${code}).`);
   });
+
+  return tunnelProcess;
 }
 
-startTunnel();
+if (require.main === module) {
+  startTunnel();
+}
+
+module.exports = { startTunnel };
