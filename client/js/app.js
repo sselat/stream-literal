@@ -857,7 +857,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!audioAppsList) return;
     audioAppsList.innerHTML = '<div class="loading-apps" style="padding:16px;text-align:center;color:var(--text-muted);font-size:0.85rem;">Escaneando processos ativos do Windows...</div>';
 
-    const isTauri = typeof window.__TAURI__ !== 'undefined';
+    const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
+    const isTauri = typeof invoke === 'function';
     const ignored = getIgnoredExes();
 
     if (!isTauri) {
@@ -890,7 +891,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const apps = await window.__TAURI__.core.invoke('get_audio_apps');
+      const apps = await invoke('get_audio_apps');
       renderAudioAppsList(apps, ignored);
     } catch (err) {
       audioAppsList.innerHTML = `<div style="padding:12px;color:var(--danger);font-size:0.85rem;">Erro ao listar aplicativos: ${err.message}</div>`;
