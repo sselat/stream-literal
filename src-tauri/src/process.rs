@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
+use windows::core::Interface;
 use windows::Win32::Foundation::*;
+use windows::Win32::System::Com::*;
+use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Diagnostics::ToolHelp::*;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -12,11 +15,48 @@ pub struct AudioAppInfo {
     pub icon_hint: String,
 }
 
+pub fn get_audio_session_pids() -> HashSet<u32> {
+    let mut pids = HashSet::new();
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        if let Ok(enumerator) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) {
+            if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia) {
+                if let Ok(session_manager) = device.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None) {
+                    if let Ok(session_enum) = session_manager.GetSessionEnumerator() {
+                        let count = session_enum.GetCount().unwrap_or(0);
+                        for i in 0..count {
+                            if let Ok(control) = session_enum.GetSession(i) {
+                                if let Ok(control2) = control.cast::<IAudioSessionControl2>() {
+                                    if let Ok(pid) = control2.GetProcessId() {
+                                        let is_system = control2.IsSystemSoundsSession() == S_OK;
+                                        if pid > 4 && !is_system {
+                                            pids.insert(pid);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    pids
+}
+
 pub fn list_active_applications() -> Vec<AudioAppInfo> {
+    let audio_pids = get_audio_session_pids();
     let mut apps = Vec::new();
     let mut seen_exes = HashSet::new();
 
-    // Processos do sistema, daemons e serviços de segundo plano a ignorar
+    // Aplicativos de voz, mídia e jogos que sempre devem aparecer se estiverem abertos
+    let always_show_exes = [
+        "discord.exe", "spotify.exe", "steam.exe", "opera.exe", "chrome.exe",
+        "msedge.exe", "firefox.exe", "brave.exe", "whatsapp.root.exe", "leagueclient.exe",
+        "leagueclientux.exe", "riot client.exe", "cs2.exe", "valorant.exe"
+    ];
+
+    // Processos de sistema e antivírus a ignorar mesmo que toquem notificações do sistema
     let system_ignore = [
         "system", "registry", "smss.exe", "csrss.exe", "wininit.exe", "services.exe",
         "lsass.exe", "svchost.exe", "fontdrvhost.exe", "dwm.exe", "memory compression",
@@ -30,7 +70,12 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
         "monotificationux.exe", "crossdeviceresume.exe", "gameinputrawinputproxy.exe",
         "gamebarpresencewriter.exe", "vgc.exe", "vgtray.exe", "sqlwriter.exe",
         "secure system", "wsc_proxy.exe", "vctip.exe", "cmd.exe", "powershell.exe",
-        "cargo.exe", "language_server.exe", "model_host.exe"
+        "cargo.exe", "language_server.exe", "model_host.exe", "tiworker.exe",
+        "trustedinstaller.exe", "cleanmgr.exe", "dismhost.exe", "git.exe",
+        "mousocoreworker.exe", "nortonui.exe", "aswengsrv.exe", "aswidsagent.exe",
+        "afwserv.exe", "scpbradguard.exe", "scpbradserv.exe", "lghub_agent.exe",
+        "lghub_system_tray.exe", "nvcontainer.exe", "nvdisplay.container.exe",
+        "openrgb.exe", "turzx.exe", "jucheck.exe", "jusched.exe"
     ];
 
     unsafe {
@@ -47,8 +92,7 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
                     let lower_exe = exe_name.to_lowercase();
                     let pid = entry.th32ProcessID;
 
-                    // Filtros para manter a lista limpa e focada em apps de usuário / jogos
-                    let is_ignored = system_ignore.contains(&lower_exe.as_str())
+                    let is_system_ignored = system_ignore.contains(&lower_exe.as_str())
                         || lower_exe.ends_with("svc.exe")
                         || lower_exe.ends_with("service.exe")
                         || lower_exe.ends_with("services.exe")
@@ -56,10 +100,14 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
                         || lower_exe.contains("crashhandler")
                         || lower_exe.contains("crashreporter")
                         || lower_exe.contains("updater")
-                        || lower_exe.contains("helper") && !lower_exe.contains("steam")
                         || lower_exe.starts_with("app_lib-");
 
-                    if pid > 4 && !is_ignored {
+                    // Critério ouro: o processo possui sessão de áudio ativa no Mixer do Windows
+                    // OU é um app conhecido de voz/mídia/jogos em execução
+                    let has_audio_session = audio_pids.contains(&pid);
+                    let is_known_media_app = always_show_exes.contains(&lower_exe.as_str());
+
+                    if pid > 4 && !is_system_ignored && (has_audio_session || is_known_media_app) {
                         if seen_exes.insert(lower_exe.clone()) {
                             let icon_hint = if lower_exe.contains("discord") {
                                 "discord".to_string()
@@ -98,6 +146,8 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
                                 "League of Legends".to_string()
                             } else if lower_exe.contains("riot client") {
                                 "Riot Client".to_string()
+                            } else if lower_exe.contains("whatsapp") {
+                                "WhatsApp".to_string()
                             } else {
                                 exe_name.strip_suffix(".exe").unwrap_or(&exe_name).to_string()
                             };
@@ -137,6 +187,12 @@ mod tests {
 
     #[test]
     fn test_list_apps() {
+        let audio_pids = get_audio_session_pids();
+        println!("\n=== Found {} Audio Session PIDs ===", audio_pids.len());
+        for pid in &audio_pids {
+            println!("- Audio PID: {}", pid);
+        }
+
         let apps = list_active_applications();
         println!("\n=== Cleaned Active User Apps ({} apps) ===", apps.len());
         for app in &apps {

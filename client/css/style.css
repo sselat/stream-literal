@@ -101,30 +101,98 @@ body {
   margin-bottom: 28px;
 }
 
-.brand-logo-wrapper {
+.brand-logo-pod {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 20px;
+  border-radius: 28px;
+  background: radial-gradient(circle at 30% 30%, rgba(30, 41, 75, 0.85) 0%, rgba(13, 17, 30, 0.95) 100%);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  box-shadow: 
+    0 10px 30px -5px rgba(0, 0, 0, 0.7),
+    0 0 25px rgba(99, 102, 241, 0.25),
+    inset 0 1px 1px rgba(255, 255, 255, 0.15),
+    inset 0 0 20px rgba(99, 102, 241, 0.15);
   display: flex;
-  justify-content: center;
   align-items: center;
-  margin-bottom: 16px;
+  justify-content: center;
+  backdrop-filter: blur(12px);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: visible;
+}
+
+.pod-glow-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.5), rgba(168, 85, 247, 0.35), rgba(56, 189, 248, 0.45));
+  z-index: -1;
+  opacity: 0.6;
+  filter: blur(8px);
+  transition: opacity 0.4s ease;
+  animation: cosmicPulseRing 4s infinite ease-in-out;
+}
+
+@keyframes cosmicPulseRing {
+  0% { transform: scale(0.98); opacity: 0.4; }
+  50% { transform: scale(1.04); opacity: 0.85; }
+  100% { transform: scale(0.98); opacity: 0.4; }
+}
+
+.brand-logo-pod:hover {
+  transform: translateY(-3px) scale(1.04);
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow: 
+    0 15px 35px -5px rgba(0, 0, 0, 0.8),
+    0 0 35px rgba(168, 85, 247, 0.4),
+    inset 0 0 20px rgba(129, 140, 248, 0.25);
+}
+
+.brand-logo-pod:hover .pod-glow-ring {
+  opacity: 1;
+  filter: blur(12px);
 }
 
 .brand-logo-img {
-  height: 72px;
-  width: auto;
+  width: 76px;
+  height: 76px;
   object-fit: contain;
-  filter: drop-shadow(0 0 16px rgba(99, 102, 241, 0.45));
-  transition: transform 0.3s ease;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 10px rgba(129, 140, 248, 0.7)) brightness(1.15) contrast(1.1);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.brand-logo-img:hover {
-  transform: scale(1.05);
+.brand-logo-pod:hover .brand-logo-img {
+  transform: scale(1.08) rotate(2deg);
+}
+
+.nav-logo-capsule {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: radial-gradient(circle, rgba(30, 41, 75, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.nav-logo-capsule:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+  transform: scale(1.06);
 }
 
 .nav-logo-img {
-  height: 30px;
-  width: auto;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
-  filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.35));
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 6px rgba(129, 140, 248, 0.6)) brightness(1.2);
 }
 
 .brand-icon {

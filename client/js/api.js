@@ -66,7 +66,7 @@ const API = {
       });
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        throw new Error('🛰️ Houston, nós temos um problema! A base estelar da Stream Literal está offline no momento (ou o Tales tropeçou no cabo de força 🔌🪐). Inicie o servidor para fazer login!');
+        throw new Error('🛰️ Houston, we have a problem\nA base estelar do Espaço Literal está fora de órbita. Tentando restabelecer contato...');
       }
       const data = await res.json();
       if (!res.ok) {
@@ -76,7 +76,7 @@ const API = {
       return data;
     } catch (err) {
       if (err.name === 'SyntaxError' || err.name === 'TypeError' || err.message.includes('JSON') || err.message.includes('fetch') || err.message.includes('NetworkError')) {
-        throw new Error('🛰️ Houston, nós temos um problema! A base estelar da Stream Literal está offline no momento (ou o Tales tropeçou no cabo de força 🔌🪐). Inicie o servidor para fazer login!');
+        throw new Error('🛰️ Houston, we have a problem\nA base estelar do Espaço Literal está fora de órbita. Tentando restabelecer contato...');
       }
       throw err;
     }
