@@ -86,6 +86,44 @@ document.addEventListener('DOMContentLoaded', () => {
   let pinnedPeerId = null;
 
   // ========================================================
+  // TRAVA DE NAVEGADOR (EXPERIÊNCIA 100% SOFTWARE NATIVO)
+  // ========================================================
+  function setupDesktopRestrictions() {
+    if (!API.isDesktopApp()) return;
+
+    // 1. Desativa menu de contexto (botão direito do navegador)
+    // Permite apenas em campos de texto (input/textarea) para copiar e colar
+    window.addEventListener('contextmenu', (e) => {
+      const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+      if (!isInput) {
+        e.preventDefault();
+      }
+    });
+
+    // 2. Desativa atalhos de navegador (F5, Ctrl+R, F12, Ctrl+Shift+I, etc.)
+    window.addEventListener('keydown', (e) => {
+      // Bloqueia recarregamento acidental (F5 / Ctrl+R / Ctrl+Shift+R)
+      if (e.key === 'F5' || (e.ctrlKey && (e.key === 'r' || e.key === 'R'))) {
+        e.preventDefault();
+        return;
+      }
+
+      // Bloqueia DevTools e atalhos de depuração (F12 / Ctrl+Shift+I / Ctrl+Shift+J)
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['i', 'I', 'j', 'J', 'c', 'C'].includes(e.key))) {
+        e.preventDefault();
+        return;
+      }
+
+      // Bloqueia exibição de código fonte (Ctrl+U)
+      if (e.ctrlKey && (e.key === 'u' || e.key === 'U')) {
+        e.preventDefault();
+      }
+    });
+  }
+
+  setupDesktopRestrictions();
+
+  // ========================================================
   // INICIALIZAÇÃO E AUTENTICAÇÃO
   // ========================================================
   async function init() {

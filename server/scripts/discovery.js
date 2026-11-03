@@ -3,6 +3,7 @@ const path = require('path');
 
 const ENV_PATH = path.join(__dirname, '..', '..', '.env');
 const CONFIG_JS_PATH = path.join(__dirname, '..', '..', 'client', 'js', 'config.js');
+const DOCS_CONFIG_JS_PATH = path.join(__dirname, '..', '..', 'docs', 'js', 'config.js');
 
 /**
  * Atualiza ou insere uma variável no arquivo .env local
@@ -39,8 +40,14 @@ window.STREAM_LITERAL_CONFIG = {
 };
 `;
     fs.writeFileSync(CONFIG_JS_PATH, code, 'utf8');
+
+    // Sincroniza também o portal estático do GitHub Pages em docs/
+    const docsDir = path.dirname(DOCS_CONFIG_JS_PATH);
+    if (fs.existsSync(docsDir)) {
+      fs.writeFileSync(DOCS_CONFIG_JS_PATH, code, 'utf8');
+    }
   } catch (err) {
-    console.warn('⚠️ Não foi possível atualizar client/js/config.js:', err.message);
+    console.warn('⚠️ Não foi possível atualizar os arquivos de config.js:', err.message);
   }
 }
 
