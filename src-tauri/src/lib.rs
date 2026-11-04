@@ -61,6 +61,8 @@ fn stop_audio_capture(state: State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+use tauri_plugin_updater::UpdaterExt;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_state = AppState {
@@ -70,6 +72,32 @@ pub fn run() {
     tauri::Builder::default()
         .manage(app_state)
         .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Aguarda 3 segundos após abrir para verificar atualizações sem travar o início
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                if let Ok(updater) = handle.updater() {
+                    match updater.check().await {
+                        Ok(Some(update)) => {
+                            log::info!("🚀 Nova versão encontrada: {}", update.version);
+                            if let Ok(_) = update.download_and_install(|_, _| {}, || {}).await {
+                                log::info!("✅ Atualização instalada com sucesso! Reiniciando aplicação...");
+                                handle.restart();
+                            }
+                        }
+                        Ok(None) => {
+                            log::info!("Stream Literal está na versão mais recente.");
+                        }
+                        Err(e) => {
+                            log::warn!("Verificação de atualização remota: {}", e);
+                        }
+                    }
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_audio_apps,
             start_audio_capture,

@@ -35,6 +35,15 @@
       "icons/icon.ico"
     ],
     "shortDescription": "Compartilhamento de tela e áudio minimalista em tempo real",
-    "copyright": "Stream Literal"
+    "copyright": "Stream Literal",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ1ODMzM0VCQUZDNzBFMEQKUldRTkRzZXY2ek9EMVdxVzdvc0ljOG1Lc3dpeStjTlluOWJDSWw0Ui92Y1UvTTVqbzd5Z0hRWFUK",
+      "endpoints": [
+        "https://github.com/sselat/stream-literal/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
