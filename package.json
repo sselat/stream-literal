@@ -11,6 +11,7 @@
     "users": "node server/scripts/manage-users.js",
     "manage-users": "node server/scripts/manage-users.js",
     "tunnel": "node server/scripts/tunnel.js",
+    "manifest": "node scripts/generate-updater-manifest.js",
     "tauri": "tauri"
   },
   "keywords": [],
