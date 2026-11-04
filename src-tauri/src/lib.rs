@@ -61,6 +61,16 @@ fn stop_audio_capture(state: State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+fn restart_app(handle: tauri::AppHandle) {
+    handle.restart();
+}
+
 use tauri_plugin_updater::UpdaterExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -97,12 +107,12 @@ pub fn run() {
 
                             match update.download_and_install(|_chunk, _total| {}, || {}).await {
                                 Ok(_) => {
-                                    log::info!("✅ Atualização instalada com sucesso! Reiniciando aplicação em 3s...");
+                                    log::info!("✅ Atualização instalada com sucesso! Emitindo aviso e aguardando 6s...");
                                     let _ = handle.emit("updater:status", serde_json::json!({
                                         "stage": "ready",
                                         "version": new_ver
                                     }));
-                                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                                    tokio::time::sleep(std::time::Duration::from_secs(6)).await;
                                     handle.restart();
                                 }
                                 Err(e) => {
@@ -129,6 +139,8 @@ pub fn run() {
             get_audio_apps,
             start_audio_capture,
             stop_audio_capture,
+            get_app_version,
+            restart_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

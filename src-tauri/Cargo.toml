@@ -1,6 +1,6 @@
 [package]
 name = "stream-literal"
-version = "1.0.0"
+version = "1.0.3"
 description = "Stream Literal Desktop Application"
 authors = ["Stream Literal Team"]
 license = "ISC"

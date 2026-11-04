@@ -1157,52 +1157,96 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   // ========================================================
-  // NOTIFICAÇÃO ELEGANTE DE ATUALIZAÇÃO AUTOMÁTICA (TAURI)
+  // VERSÃO DO APP E NOTIFICAÇÃO DO ATUALIZADOR (TAURI)
   // ========================================================
-  function showUpdaterToast(payload) {
-    let toast = document.getElementById('updater-toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'updater-toast';
-      toast.className = 'updater-toast';
-      document.body.appendChild(toast);
+  async function initAppVersion() {
+    let ver = 'v1.0.3';
+    try {
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        const nativeVer = await window.__TAURI__.core.invoke('get_app_version');
+        if (nativeVer) ver = `v${nativeVer}`;
+      }
+    } catch (err) {
+      console.warn('Erro ao obter versão nativa:', err);
     }
+    const loginVerEl = document.getElementById('login-app-version');
+    const sidebarVerEl = document.getElementById('sidebar-app-version');
+    if (loginVerEl) loginVerEl.textContent = ver;
+    if (sidebarVerEl) sidebarVerEl.textContent = ver;
+  }
+
+  function handleUpdaterEvent(payload) {
+    if (!payload) return;
 
     if (payload.stage === 'downloading') {
+      let toast = document.getElementById('updater-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'updater-toast';
+        toast.className = 'updater-toast';
+        document.body.appendChild(toast);
+      }
       toast.innerHTML = `
         <div class="updater-toast-content">
           <div class="updater-spinner"></div>
           <div class="updater-texts">
-            <div class="updater-title">Nova versão encontrada (v${payload.version})</div>
+            <div class="updater-title">Atualização encontrada (v${payload.version})</div>
             <div class="updater-desc">Baixando melhorias em segundo plano...</div>
           </div>
         </div>
       `;
       toast.classList.add('visible');
     } else if (payload.stage === 'ready') {
-      toast.innerHTML = `
-        <div class="updater-toast-content">
-          <span class="updater-icon-check">✨</span>
-          <div class="updater-texts">
-            <div class="updater-title">Atualização v${payload.version} pronta!</div>
-            <div class="updater-desc">Reiniciando aplicação em 3 segundos...</div>
-          </div>
-        </div>
-        <div class="updater-progress-bar"><div class="updater-progress-fill"></div></div>
-      `;
-      toast.classList.add('visible');
+      const toast = document.getElementById('updater-toast');
+      if (toast) toast.classList.remove('visible');
+
+      const modal = document.getElementById('updater-modal');
+      const modalVer = document.getElementById('updater-modal-ver');
+      const countdownNum = document.getElementById('updater-countdown-num');
+      const btnRestart = document.getElementById('btn-restart-now');
+
+      if (modalVer) modalVer.textContent = `v${payload.version}`;
+      if (modal) modal.style.display = 'flex';
+
+      let secondsLeft = 6;
+      const interval = setInterval(() => {
+        secondsLeft--;
+        if (countdownNum) countdownNum.textContent = secondsLeft;
+        if (secondsLeft <= 0) {
+          clearInterval(interval);
+        }
+      }, 1000);
+
+      if (btnRestart) {
+        btnRestart.onclick = () => {
+          clearInterval(interval);
+          btnRestart.disabled = true;
+          btnRestart.querySelector('span').textContent = 'Reiniciando...';
+          if (window.__TAURI__ && window.__TAURI__.core) {
+            window.__TAURI__.core.invoke('restart_app').catch(err => {
+              console.warn('restart_app:', err);
+              window.location.reload();
+            });
+          } else {
+            window.location.reload();
+          }
+        };
+      }
     } else if (payload.stage === 'error') {
-      toast.classList.remove('visible');
+      const toast = document.getElementById('updater-toast');
+      if (toast) toast.classList.remove('visible');
     }
   }
 
   if (window.__TAURI__ && window.__TAURI__.event) {
     window.__TAURI__.event.listen('updater:status', (event) => {
       if (event && event.payload) {
-        showUpdaterToast(event.payload);
+        handleUpdaterEvent(event.payload);
       }
     });
   }
+
+  initAppVersion();
 
   // Início
   init();

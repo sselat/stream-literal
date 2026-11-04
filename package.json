@@ -1,6 +1,6 @@
 {
   "name": "stream-literal",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Stream Literal - Compartilhamento de tela e áudio minimalista para pequenos grupos",
   "main": "server/index.js",
   "scripts": {

@@ -48,6 +48,11 @@
         <small>Acesso exclusivo para membros autorizados</small>
       </div>
     </div>
+
+    <!-- Tag da versão no canto inferior direito da tela de login -->
+    <div class="login-version-tag">
+      <span class="app-version-badge" id="login-app-version">v1.0.3</span>
+    </div>
   </div>
 
   <!-- ================= SALA PRINCIPAL ================= -->
@@ -290,6 +295,11 @@
         <ul class="members-list" id="members-online-list">
           <!-- Membros online gerados dinamicamente -->
         </ul>
+
+        <!-- Rodapé do menu lateral com versão do app -->
+        <div class="sidebar-footer">
+          <span class="app-version-badge" id="sidebar-app-version">v1.0.3</span>
+        </div>
       </aside>
 
     </main>
@@ -421,6 +431,28 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL ELEGANTE DE ATUALIZAÇÃO ================= -->
+  <div id="updater-modal" class="modal-backdrop" style="display: none; z-index: 100000;">
+    <div class="modal-card updater-modal-card">
+      <div class="updater-modal-icon-glow">
+        <span class="updater-modal-icon">🚀</span>
+      </div>
+      <h2 id="updater-modal-title">Atualização Pronta!</h2>
+      <p id="updater-modal-message">O Stream Literal foi atualizado para a versão <strong id="updater-modal-ver">v1.0.3</strong>.</p>
+      
+      <div class="updater-countdown-container" id="updater-countdown-container">
+        <p class="updater-countdown-text">Reiniciando automaticamente em <strong id="updater-countdown-num">6</strong> segundos...</p>
+        <div class="updater-progress-bar"><div class="updater-progress-fill"></div></div>
+      </div>
+
+      <div class="updater-modal-actions">
+        <button type="button" id="btn-restart-now" class="btn btn-primary btn-block">
+          <span>Reiniciar Agora</span>
+        </button>
       </div>
     </div>
   </div>
