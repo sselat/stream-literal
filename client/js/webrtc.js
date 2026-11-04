@@ -90,78 +90,40 @@ class WebRTCManager {
     let capturedStream = null;
     let audioFailed = false;
 
-    const isDesktop = typeof API !== 'undefined' && API.isDesktopApp() && window.AudioBridge?.isSupported();
-
-    if (isDesktop) {
-      // 1. App Desktop Tauri:
-      // Captura de tela com vídeo limpo via getDisplayMedia. O áudio do sistema será capturado
-      // de forma isolada e profissional diretamente pelo Rust através do WASAPI Loopback.
-      try {
-        capturedStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            cursor: 'always',
-            frameRate: { ideal: 30, max: 60 }
-          },
-          audio: false
-        });
-      } catch (err) {
-        console.warn('Compartilhamento cancelado pelo usuário:', err);
-        this.isSharingScreen = false;
-        this.onStreamingStateChanged(false);
-        return false;
-      }
-
-      if (!capturedStream) return false;
-
-      // 2. Inicia o pipeline de áudio nativo em Rust com exclusão de processos (Discord etc)
-      try {
-        const { track, info } = await window.AudioBridge.start(ignoredExes, true);
-        if (track) {
-          capturedStream.addTrack(track);
-          console.log('🎉 Áudio nativo isolado acoplado à transmissão:', info);
-          if (this.onNotice && info?.target_exe) {
-            this.onNotice(`Transmissão iniciada! Áudio de "${info.target_exe}" isolado com sucesso.`, 'info');
-          }
-        }
-      } catch (audioErr) {
-        console.warn('⚠️ Não foi possível iniciar captura nativa de áudio:', audioErr);
+    // 1. Solicita captura de tela permitindo ao usuário escolher no diálogo nativo do sistema
+    // se deseja compartilhar áudio (checkbox "Compartilhar áudio do sistema")
+    try {
+      capturedStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: 'always',
+          frameRate: { ideal: 30, max: 60 }
+        },
+        audio: true
+      });
+    } catch (err) {
+      if (err.name === 'NotReadableError' || err.name === 'OverconstrainedError' || (err.message && err.message.toLowerCase().includes('audio'))) {
+        console.warn('⚠️ Não foi possível capturar o áudio do sistema nessa janela/dispositivo. Tentando fallback apenas vídeo...', err);
         audioFailed = true;
-      }
-    } else {
-      // Navegador Web Comum (Viewer ou streamer via browser)
-      try {
-        capturedStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            cursor: 'always',
-            frameRate: { ideal: 30, max: 60 }
-          },
-          audio: true
-        });
-      } catch (err) {
-        if (err.name === 'NotReadableError' || err.name === 'OverconstrainedError' || (err.message && err.message.toLowerCase().includes('audio'))) {
-          console.warn('⚠️ Não foi possível capturar o áudio do sistema nessa janela/dispositivo. Tentando fallback sem áudio...', err);
-          audioFailed = true;
 
-          try {
-            capturedStream = await navigator.mediaDevices.getDisplayMedia({
-              video: {
-                cursor: 'always',
-                frameRate: { ideal: 30, max: 60 }
-              },
-              audio: false
-            });
-          } catch (fallbackErr) {
-            console.warn('Compartilhamento cancelado pelo usuário:', fallbackErr);
-            this.isSharingScreen = false;
-            this.onStreamingStateChanged(false);
-            return false;
-          }
-        } else {
-          console.warn('Compartilhamento cancelado pelo usuário ou não permitido:', err);
+        try {
+          capturedStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              cursor: 'always',
+              frameRate: { ideal: 30, max: 60 }
+            },
+            audio: false
+          });
+        } catch (fallbackErr) {
+          console.warn('Compartilhamento cancelado pelo usuário:', fallbackErr);
           this.isSharingScreen = false;
           this.onStreamingStateChanged(false);
           return false;
         }
+      } else {
+        console.warn('Compartilhamento cancelado pelo usuário ou não permitido:', err);
+        this.isSharingScreen = false;
+        this.onStreamingStateChanged(false);
+        return false;
       }
     }
 
@@ -169,6 +131,31 @@ class WebRTCManager {
       this.isSharingScreen = false;
       this.onStreamingStateChanged(false);
       return false;
+    }
+
+    // 2. Se estiver no App Desktop e o usuário marcou a opção de transmitir som:
+    // O Rust WASAPI Loopback isola processos configurados (Discord, Spotify, etc).
+    const isDesktop = typeof API !== 'undefined' && API.isDesktopApp() && window.AudioBridge?.isSupported();
+    const userWantsAudio = capturedStream.getAudioTracks().length > 0;
+
+    if (isDesktop && userWantsAudio) {
+      try {
+        const { track, info } = await window.AudioBridge.start(ignoredExes, true);
+        if (track) {
+          // Substitui a faixa de áudio padrão do sistema pela versão filtrada pelo Rust
+          capturedStream.getAudioTracks().forEach(t => {
+            t.stop();
+            capturedStream.removeTrack(t);
+          });
+          capturedStream.addTrack(track);
+          console.log('🎉 Áudio isolado via WASAPI acoplado com sucesso:', info);
+          if (this.onNotice && info?.target_exe) {
+            this.onNotice(`Transmissão iniciada! Áudio de "${info.target_exe}" isolado com sucesso.`, 'info');
+          }
+        }
+      } catch (audioErr) {
+        console.warn('⚠️ Loopback Rust não iniciou, mantendo áudio padrão do sistema:', audioErr);
+      }
     }
 
     this.localStream = capturedStream;
@@ -179,7 +166,7 @@ class WebRTCManager {
     if (audioFailed || !hasAudioTrack) {
       console.log('ℹ️ Transmissão iniciada apenas com vídeo.');
       if (this.onNotice) {
-        this.onNotice('Transmissão iniciada sem som. Para transmitir áudio, escolha "Tela Inteira" ou uma "Aba do Chrome".', 'warning');
+        this.onNotice('Transmissão iniciada sem som. Para transmitir áudio, marque a opção "Compartilhar áudio do sistema" na janela de seleção.', 'warning');
       }
     }
 

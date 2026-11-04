@@ -42,8 +42,8 @@ class AudioBridge {
     const { Channel, invoke } = window.__TAURI__.core;
     this.channel = new Channel();
 
-    this.channel.onmessage = (arrayBuffer) => {
-      this.handleAudioChunk(arrayBuffer);
+    this.channel.onmessage = (chunk) => {
+      this.handleAudioChunk(chunk);
     };
 
     console.log('🎙️ [AudioBridge] Solicitando início da captura nativa ao Rust...', { targetExes, exclude });
@@ -86,16 +86,30 @@ class AudioBridge {
   /**
    * Alimenta os chunks PCM estéreo Float32 recebidos do Rust no Web Audio
    */
-  handleAudioChunk(arrayBuffer) {
+  handleAudioChunk(data) {
     if (!this.isCapturing || !this.audioCtx || !this.destination) return;
-    if (!arrayBuffer) return;
+    if (!data) return;
 
-    // Garante que temos um ArrayBuffer
-    const buffer = arrayBuffer instanceof ArrayBuffer ? arrayBuffer : arrayBuffer.buffer;
-    if (!buffer || buffer.byteLength === 0) return;
+    if (this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
 
-    const floatArray = new Float32Array(buffer);
-    const numFrames = floatArray.length / 2; // Estéreo: 2 canais por frame
+    let floatArray;
+    try {
+      if (data instanceof ArrayBuffer) {
+        floatArray = new Float32Array(data);
+      } else if (ArrayBuffer.isView(data)) {
+        floatArray = new Float32Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 4));
+      } else if (Array.isArray(data)) {
+        floatArray = new Float32Array(new Uint8Array(data).buffer);
+      } else {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    const numFrames = Math.floor(floatArray.length / 2); // Estéreo: 2 canais por frame
     if (numFrames <= 0) return;
 
     try {
@@ -114,11 +128,10 @@ class AudioBridge {
       source.connect(this.destination);
 
       const now = this.audioCtx.currentTime;
-      // Jitter buffer adaptativo (30ms para suavidade impecável)
+      // Jitter buffer adaptativo (30ms para suavidade)
       if (this.nextPlayTime < now) {
         this.nextPlayTime = now + 0.03;
       } else if (this.nextPlayTime > now + 0.12) {
-        // Se acumulou latência por queda de frames, reajusta para tempo real
         this.nextPlayTime = now + 0.03;
       }
 
@@ -137,8 +150,8 @@ class AudioBridge {
 
     const { Channel, invoke } = window.__TAURI__.core;
     const newChannel = new Channel();
-    newChannel.onmessage = (arrayBuffer) => {
-      this.handleAudioChunk(arrayBuffer);
+    newChannel.onmessage = (chunk) => {
+      this.handleAudioChunk(chunk);
     };
     this.channel = newChannel;
 

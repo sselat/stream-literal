@@ -235,7 +235,19 @@ impl AudioCaptureEngine {
         };
 
         unsafe {
-            let pwfx = audio_client.GetMixFormat()?;
+            // Em clientes criados por ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK),
+            // a chamada client.GetMixFormat() retorna E_NOTIMPL (0x80004001).
+            // Portanto, consultamos o formato de mixagem do endpoint padrão ativo no Windows.
+            let enumerator: IMMDeviceEnumerator =
+                windows::Win32::System::Com::CoCreateInstance(
+                    &MMDeviceEnumerator,
+                    None,
+                    windows::Win32::System::Com::CLSCTX_ALL,
+                )?;
+            let default_device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)?;
+            let default_client: IAudioClient = default_device.Activate(windows::Win32::System::Com::CLSCTX_ALL, None)?;
+            let pwfx = default_client.GetMixFormat()?;
+
             let sample_rate = (*pwfx).nSamplesPerSec;
             let channels = (*pwfx).nChannels;
             let bits_per_sample = (*pwfx).wBitsPerSample;
@@ -357,10 +369,44 @@ mod tests {
             );
         }
 
-        // Se o Discord estiver em execução, valida a ativação sem erros e sem corrupção de heap
         if let Some(pid) = crate::process::find_root_pid_for_exe("discord.exe") {
             let client = AudioCaptureEngine::get_audio_client(pid, true);
             assert!(client.is_ok(), "Falha ao ativar loopback para PID do Discord");
+        }
+    }
+
+    #[test]
+    fn test_format_and_initialize() {
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(
+                None,
+                windows::Win32::System::Com::COINIT_MULTITHREADED,
+            );
+
+            let enumerator: IMMDeviceEnumerator =
+                windows::Win32::System::Com::CoCreateInstance(
+                    &MMDeviceEnumerator,
+                    None,
+                    windows::Win32::System::Com::CLSCTX_ALL,
+                ).unwrap();
+            let default_device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia).unwrap();
+            let default_client: IAudioClient = default_device.Activate(windows::Win32::System::Com::CLSCTX_ALL, None).unwrap();
+            let pwfx = default_client.GetMixFormat().unwrap();
+
+            if let Some(pid) = crate::process::find_root_pid_for_exe("discord.exe") {
+                let client = AudioCaptureEngine::get_audio_client(pid, true).unwrap();
+                let init_res = client.Initialize(
+                    AUDCLNT_SHAREMODE_SHARED,
+                    AUDCLNT_STREAMFLAGS_LOOPBACK,
+                    500000,
+                    0,
+                    pwfx,
+                    None,
+                );
+                assert!(init_res.is_ok(), "Falha ao inicializar com MixFormat do endpoint padrão");
+            }
+
+            CoTaskMemFree(Some(pwfx as *const _));
         }
     }
 }

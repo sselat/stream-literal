@@ -403,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
     spotlightVideo.muted = isSelf;
 
     if (isSelf) {
-      spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill">🔇 Sua tela (áudio mutado localmente)</span>';
+      spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill">🔇 Sua tela (áudio silenciado para você não ter eco • Transmitindo normalmente)</span>';
       iconVolumeHigh.style.display = 'none';
       iconVolumeMuted.style.display = 'block';
     } else {
@@ -516,22 +516,21 @@ document.addEventListener('DOMContentLoaded', () => {
       spotlightVideo.muted = true;
       iconVolumeHigh.style.display = 'none';
       iconVolumeMuted.style.display = 'block';
+      if (pinnedPeerId === socket?.id) {
+        spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill">🔇 Sua tela (áudio silenciado para você não ter eco • Transmitindo normalmente)</span>';
+      }
     } else {
-      if (pinnedPeerId !== socket?.id) {
-        spotlightVideo.muted = false;
-        iconVolumeHigh.style.display = 'block';
-        iconVolumeMuted.style.display = 'none';
+      spotlightVideo.muted = false;
+      iconVolumeHigh.style.display = 'block';
+      iconVolumeMuted.style.display = 'none';
+      if (pinnedPeerId === socket?.id) {
+        spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill" style="color: var(--warning);">🔊 Sua tela (áudio local ativo • cuidado com eco)</span>';
       }
     }
   });
 
   // Botão de Mutar/Desmutar
   btnSpotlightMute.addEventListener('click', () => {
-    if (pinnedPeerId === socket?.id) {
-      // Se for a própria tela, mantém mutado para evitar eco
-      return;
-    }
-
     if (spotlightVideo.muted) {
       spotlightVideo.muted = false;
       const targetVol = parseFloat(spotlightVolumeSlider.value) || 0.8;
@@ -539,10 +538,19 @@ document.addEventListener('DOMContentLoaded', () => {
       spotlightVolumeSlider.value = targetVol;
       iconVolumeHigh.style.display = 'block';
       iconVolumeMuted.style.display = 'none';
+
+      if (pinnedPeerId === socket?.id) {
+        spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill" style="color: var(--warning);">🔊 Sua tela (áudio local ativo • cuidado com eco)</span>';
+        showNotice('🔊 Áudio da sua tela ativado no player local. Cuidado com microfonia se não estiver usando fone.', 'warning');
+      }
     } else {
       spotlightVideo.muted = true;
       iconVolumeHigh.style.display = 'none';
       iconVolumeMuted.style.display = 'block';
+
+      if (pinnedPeerId === socket?.id) {
+        spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill">🔇 Sua tela (áudio silenciado para você não ter eco • Transmitindo normalmente)</span>';
+      }
     }
   });
 
