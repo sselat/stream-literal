@@ -936,12 +936,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const IGNORED_AUDIO_KEY = 'stream_literal_ignored_audio_exes';
 
   function getIgnoredExes() {
+    let list = ['stream-literal.exe', 'msedgewebview2.exe', 'discord.exe'];
     try {
       const stored = localStorage.getItem(IGNORED_AUDIO_KEY);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          list = Array.from(new Set([...list, ...parsed]));
+        }
+      }
     } catch { }
-    // Padrão inteligente: Discord silenciado por padrão
-    return ['discord.exe'];
+    return list;
   }
 
   function saveIgnoredExes(list) {
@@ -1019,7 +1024,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return aIgnored - bIgnored || a.name.localeCompare(b.name);
     });
 
-    mergedList.forEach(app => {
+    // Oculta processos internos do próprio Stream Literal da lista visual do usuário
+    const visibleApps = mergedList.filter(app => {
+      const low = app.exe_name.toLowerCase();
+      return low !== 'stream-literal.exe' && low !== 'msedgewebview2.exe';
+    });
+
+    visibleApps.forEach(app => {
       const isChecked = ignored.includes(app.exe_name.toLowerCase());
       const item = document.createElement('div');
       item.className = `audio-app-item ${isChecked ? 'selected' : ''}`;
@@ -1121,6 +1132,10 @@ document.addEventListener('DOMContentLoaded', () => {
           selected.push(c.dataset.exe.toLowerCase());
         }
       });
+      // Garante sempre stream-literal.exe e msedgewebview2.exe como protegidos por padrão
+      if (!selected.includes('stream-literal.exe')) selected.push('stream-literal.exe');
+      if (!selected.includes('msedgewebview2.exe')) selected.push('msedgewebview2.exe');
+
       saveIgnoredExes(selected);
       audioSettingsStatus.className = 'status-msg success';
       audioSettingsStatus.textContent = '✅ Configurações salvas permanentemente!';
@@ -1132,7 +1147,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (res?.target_exe) {
             showNotice(`Filtro atualizado em tempo real! "${res.target_exe}" está silenciado.`, 'info');
           } else {
-            showNotice('Filtro atualizado em tempo real! Capturando som do sistema.', 'info');
+            showNotice('Filtro atualizado em tempo real! Áudio do sistema ativo com proteção contra eco.', 'info');
           }
         } catch (err) {
           console.warn('Erro ao atualizar exclusão mid-stream:', err);
@@ -1160,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // VERSÃO DO APP E NOTIFICAÇÃO DO ATUALIZADOR (TAURI)
   // ========================================================
   async function initAppVersion() {
-    let ver = 'v1.0.3';
+    let ver = 'v1.0.4';
     try {
       if (window.__TAURI__ && window.__TAURI__.core) {
         const nativeVer = await window.__TAURI__.core.invoke('get_app_version');

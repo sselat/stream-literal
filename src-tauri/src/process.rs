@@ -24,6 +24,37 @@ pub struct AudioAppInfo {
     pub icon_hint: String,
 }
 
+pub fn get_pid_from_window_label(label: &str) -> Option<u32> {
+    let trimmed = label.trim();
+    // Chromium no Windows identifica janelas como "window:123456:0" ou "window:123456"
+    // onde o valor numérico é o HWND (Handle da Janela Win32)
+    if let Some(rest) = trimmed.strip_prefix("window:") {
+        let parts: Vec<&str> = rest.split(':').collect();
+        let raw_val = parts[0].trim();
+        let hwnd_val: Option<isize> = if raw_val.starts_with("0x") || raw_val.starts_with("0X") {
+            isize::from_str_radix(&raw_val[2..], 16).ok()
+        } else {
+            raw_val
+                .parse::<isize>()
+                .ok()
+                .or_else(|| raw_val.parse::<usize>().ok().map(|u| u as isize))
+        };
+
+        if let Some(val) = hwnd_val {
+            use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+            let hwnd = HWND(val as *mut std::ffi::c_void);
+            let mut pid = 0u32;
+            unsafe {
+                GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            }
+            if pid > 0 {
+                return Some(pid);
+            }
+        }
+    }
+    None
+}
+
 pub fn find_root_pid_for_exe(exe_name: &str) -> Option<u32> {
     let lower_target = exe_name.to_lowercase();
     let lower_target = lower_target.trim();
@@ -78,6 +109,10 @@ pub fn find_root_pid_for_exe(exe_name: &str) -> Option<u32> {
 
 pub fn find_first_active_target(exes: &[String]) -> Option<(String, u32)> {
     for exe in exes {
+        let lower = exe.to_lowercase();
+        if lower == "stream-literal.exe" || lower == "msedgewebview2.exe" {
+            return Some((lower, std::process::id()));
+        }
         if let Some(pid) = find_root_pid_for_exe(exe) {
             return Some((exe.clone(), pid));
         }
@@ -216,6 +251,8 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
         "turzx.exe",
         "jucheck.exe",
         "jusched.exe",
+        "stream-literal.exe",
+        "msedgewebview2.exe",
     ];
 
     unsafe {

@@ -24,32 +24,49 @@ fn get_audio_apps() -> Vec<process::AudioAppInfo> {
 }
 
 #[tauri::command]
+fn get_pid_from_window(label: String) -> Option<u32> {
+    process::get_pid_from_window_label(&label)
+}
+
+#[tauri::command]
 fn start_audio_capture(
     state: State<'_, AppState>,
     on_audio_chunk: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
     target_exes: Option<Vec<String>>,
-    exclude: bool,
+    target_pid: Option<u32>,
+    exclude: Option<bool>,
 ) -> Result<CaptureStartResult, String> {
-    let mut target_pid = 0u32;
+    let exclude = exclude.unwrap_or(true);
+    let mut resolved_pid = target_pid.unwrap_or(0);
     let mut chosen_exe: Option<String> = None;
 
-    if let Some(ref exes) = target_exes {
-        if let Some((exe, pid)) = process::find_first_active_target(exes) {
-            target_pid = pid;
-            chosen_exe = Some(exe);
+    if resolved_pid == 0 {
+        if let Some(ref exes) = target_exes {
+            if let Some((exe, pid)) = process::find_first_active_target(exes) {
+                resolved_pid = pid;
+                chosen_exe = Some(exe);
+            }
         }
+    }
+
+    // Se estiver em modo de exclusão e nenhum PID for identificado, o alvo padrão
+    // de exclusão passa a ser o próprio Stream Literal (std::process::id()),
+    // garantindo proteção absoluta contra loop de eco entre transmissões mútuas.
+    if resolved_pid == 0 && exclude {
+        resolved_pid = std::process::id();
+        chosen_exe = Some("stream-literal.exe".to_string());
     }
 
     let engine = state.audio_engine.lock().map_err(|e| e.to_string())?;
     let sample_rate = engine
-        .start_capture(target_pid, exclude, on_audio_chunk)
+        .start_capture(resolved_pid, exclude, on_audio_chunk)
         .map_err(|e| format!("{:?}", e))?;
 
     Ok(CaptureStartResult {
         sample_rate,
         channels: 2,
         target_exe: chosen_exe,
-        target_pid,
+        target_pid: resolved_pid,
         is_excluded: exclude,
     })
 }
@@ -137,6 +154,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_audio_apps,
+            get_pid_from_window,
             start_audio_capture,
             stop_audio_capture,
             get_app_version,

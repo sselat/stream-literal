@@ -1,4 +1,5 @@
 use std::sync::mpsc::SyncSender;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use windows::core::{implement, Interface, Ref, Result};
@@ -42,19 +43,29 @@ impl IActivateAudioInterfaceCompletionHandler_Impl for AudioActivationHandler_Im
 }
 
 pub struct AudioCaptureEngine {
-    is_running: Arc<Mutex<bool>>,
+    session_token: Arc<Mutex<Option<Arc<AtomicBool>>>>,
+    thread_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
 }
 
 impl AudioCaptureEngine {
     pub fn new() -> Self {
         Self {
-            is_running: Arc::new(Mutex::new(false)),
+            session_token: Arc::new(Mutex::new(None)),
+            thread_handle: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn stop(&self) {
-        if let Ok(mut running) = self.is_running.lock() {
-            *running = false;
+        if let Ok(mut token_guard) = self.session_token.lock() {
+            if let Some(token) = token_guard.take() {
+                token.store(false, Ordering::SeqCst);
+            }
+        }
+        if let Ok(mut handle_guard) = self.thread_handle.lock() {
+            if let Some(handle) = handle_guard.take() {
+                // Aguarda síncronamente o encerramento limpo da thread e liberação de recursos COM
+                let _ = handle.join();
+            }
         }
     }
 
@@ -64,18 +75,19 @@ impl AudioCaptureEngine {
         exclude: bool,
         channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
     ) -> Result<u32> {
-        self.stop(); // Interrompe qualquer captura anterior ativa
-        std::thread::sleep(Duration::from_millis(60));
+        self.stop(); // Garante parada e join limpo da sessão anterior
 
-        let is_running_clone = self.is_running.clone();
+        let session_token = Arc::new(AtomicBool::new(true));
+        let token_for_thread = session_token.clone();
+
         {
-            let mut running = self.is_running.lock().unwrap();
-            *running = true;
+            let mut token_guard = self.session_token.lock().unwrap();
+            *token_guard = Some(session_token);
         }
 
         let (init_tx, init_rx) = std::sync::mpsc::sync_channel::<Result<u32>>(1);
 
-        std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             unsafe {
                 let _ = windows::Win32::System::Com::CoInitializeEx(
                     None,
@@ -84,7 +96,7 @@ impl AudioCaptureEngine {
             }
 
             if let Err(e) =
-                Self::run_loopback_thread(target_pid, exclude, channel, is_running_clone, init_tx)
+                Self::run_loopback_thread(target_pid, exclude, channel, token_for_thread, init_tx)
             {
                 eprintln!(
                     "[AudioCaptureEngine] Thread de captura finalizada com erro: {:?}",
@@ -97,12 +109,23 @@ impl AudioCaptureEngine {
             }
         });
 
+        {
+            let mut handle_guard = self.thread_handle.lock().unwrap();
+            *handle_guard = Some(handle);
+        }
+
         init_rx
             .recv_timeout(Duration::from_secs(3))
             .map_err(|_| windows::core::Error::from(windows::core::HRESULT(-1)))?
     }
 
-    fn get_audio_client(target_pid: u32, exclude: bool) -> Result<IAudioClient> {
+    fn get_audio_client(mut target_pid: u32, exclude: bool) -> Result<IAudioClient> {
+        // Se target_pid for 0 no modo exclusão, definimos como o PID do próprio Stream Literal!
+        // Isso garante que o Stream Literal e o WebView2 NUNCA entrem na captura,
+        // eliminando qualquer eco mútuo mesmo que nenhum outro processo tenha sido filtrado.
+        if target_pid == 0 && exclude {
+            target_pid = std::process::id();
+        }
         if target_pid > 0 {
             let size = std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>();
             let p_mem = unsafe { CoTaskMemAlloc(size) } as *mut AUDIOCLIENT_ACTIVATION_PARAMS;
@@ -220,7 +243,7 @@ impl AudioCaptureEngine {
         target_pid: u32,
         exclude: bool,
         channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
-        is_running: Arc<Mutex<bool>>,
+        is_running: Arc<AtomicBool>,
         init_tx: SyncSender<Result<u32>>,
     ) -> Result<()> {
         let audio_client_res = Self::get_audio_client(target_pid, exclude);
@@ -282,7 +305,7 @@ impl AudioCaptureEngine {
             // Notifica o chamador que o cliente WASAPI inicializou com sucesso
             let _ = init_tx.send(Ok(sample_rate));
 
-            while *is_running.lock().unwrap() {
+            while is_running.load(Ordering::SeqCst) {
                 let mut packet_size = capture_client.GetNextPacketSize()?;
                 while packet_size > 0 {
                     let mut p_data = std::ptr::null_mut();

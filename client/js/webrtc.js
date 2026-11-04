@@ -86,17 +86,18 @@ class WebRTCManager {
   // TRANSMISSÃO (PRODUTOR / SENDER)
   // ========================================================
 
-  async startScreenShare(existingPeers = [], ignoredExes = ['discord.exe']) {
+  async startScreenShare(existingPeers = [], ignoredExes = ['stream-literal.exe', 'msedgewebview2.exe', 'discord.exe']) {
     let capturedStream = null;
     let audioFailed = false;
 
-    // 1. Solicita captura de tela permitindo ao usuário escolher no diálogo nativo do sistema
-    // se deseja compartilhar áudio (checkbox "Compartilhar áudio do sistema")
+    // 1. Solicita captura de tela em 60 FPS com resolução 1080p
     try {
       capturedStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           cursor: 'always',
-          frameRate: { ideal: 30, max: 60 }
+          frameRate: { ideal: 60, max: 60 },
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 }
         },
         audio: true
       });
@@ -109,7 +110,9 @@ class WebRTCManager {
           capturedStream = await navigator.mediaDevices.getDisplayMedia({
             video: {
               cursor: 'always',
-              frameRate: { ideal: 30, max: 60 }
+              frameRate: { ideal: 60, max: 60 },
+              width: { ideal: 1920, max: 1920 },
+              height: { ideal: 1080, max: 1080 }
             },
             audio: false
           });
@@ -133,25 +136,62 @@ class WebRTCManager {
       return false;
     }
 
+    // Configura otimização de movimento contínuo (jogos 60 FPS) no track de vídeo
+    const videoTrack = capturedStream.getVideoTracks()[0];
+    if (videoTrack) {
+      if ('contentHint' in videoTrack) {
+        videoTrack.contentHint = 'motion';
+      }
+      videoTrack.onended = () => {
+        this.stopScreenShare();
+      };
+    }
+
     // 2. Se estiver no App Desktop e o usuário marcou a opção de transmitir som:
-    // O Rust WASAPI Loopback isola processos configurados (Discord, Spotify, etc).
     const isDesktop = typeof API !== 'undefined' && API.isDesktopApp() && window.AudioBridge?.isSupported();
     const userWantsAudio = capturedStream.getAudioTracks().length > 0;
 
     if (isDesktop && userWantsAudio) {
       try {
-        const { track, info } = await window.AudioBridge.start(ignoredExes, true);
-        if (track) {
-          // Substitui a faixa de áudio padrão do sistema pela versão filtrada pelo Rust
+        const settings = videoTrack?.getSettings ? videoTrack.getSettings() : {};
+        const isWindow = settings.displaySurface === 'window';
+        let windowPid = null;
+
+        if (isWindow && videoTrack?.label && window.__TAURI__?.core?.invoke) {
+          try {
+            windowPid = await window.__TAURI__.core.invoke('get_pid_from_window', { label: videoTrack.label });
+            console.log('🪟 [WebRTC] Janela selecionada com PID detectado:', windowPid, 'Label:', videoTrack.label);
+          } catch (wErr) {
+            console.warn('Não foi possível obter PID da janela:', wErr);
+          }
+        }
+
+        let audioResult = null;
+        if (isWindow && windowPid) {
+          // Modo Janela Exclusivo: captura APENAS o som deste aplicativo e silencia todo o restante do PC!
+          audioResult = await window.AudioBridge.startForWindow(windowPid);
+          if (this.onNotice) {
+            this.onNotice('Transmissão de janela iniciada! Capturando exclusivamente o áudio deste aplicativo.', 'info');
+          }
+        } else {
+          // Modo Tela Inteira: captura som do sistema com exclusão segura de Stream Literal e Discord
+          audioResult = await window.AudioBridge.start(ignoredExes, true);
+          if (this.onNotice) {
+            if (audioResult?.info?.target_exe) {
+              this.onNotice(`Transmissão iniciada! Áudio de "${audioResult.info.target_exe}" isolado com sucesso.`, 'info');
+            } else {
+              this.onNotice('Transmissão iniciada! Áudio do sistema ativo com proteção contra eco.', 'info');
+            }
+          }
+        }
+
+        if (audioResult?.track) {
           capturedStream.getAudioTracks().forEach(t => {
             t.stop();
             capturedStream.removeTrack(t);
           });
-          capturedStream.addTrack(track);
-          console.log('🎉 Áudio isolado via WASAPI acoplado com sucesso:', info);
-          if (this.onNotice && info?.target_exe) {
-            this.onNotice(`Transmissão iniciada! Áudio de "${info.target_exe}" isolado com sucesso.`, 'info');
-          }
+          capturedStream.addTrack(audioResult.track);
+          console.log('🎉 Áudio acoplado com sucesso:', audioResult.info);
         }
       } catch (audioErr) {
         console.warn('⚠️ Loopback Rust não iniciou, mantendo áudio padrão do sistema:', audioErr);
@@ -168,14 +208,6 @@ class WebRTCManager {
       if (this.onNotice) {
         this.onNotice('Transmissão iniciada sem som. Para transmitir áudio, marque a opção "Compartilhar áudio do sistema" na janela de seleção.', 'warning');
       }
-    }
-
-    // Listener para quando o usuário clicar em "Interromper compartilhamento" na barra nativa do navegador
-    const videoTrack = this.localStream.getVideoTracks()[0];
-    if (videoTrack) {
-      videoTrack.onended = () => {
-        this.stopScreenShare();
-      };
     }
 
     // Notifica o servidor de sinalização
@@ -228,7 +260,29 @@ class WebRTCManager {
         }
       };
 
+      // Configura parâmetros de codificação de alta fidelidade no sender de vídeo (8 Mbps, 60 FPS)
+      const senders = pc.getSenders();
+      const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+      if (videoSender && videoSender.getParameters) {
+        try {
+          const params = videoSender.getParameters();
+          if (!params.encodings || params.encodings.length === 0) {
+            params.encodings = [{}];
+          }
+          params.encodings[0].maxBitrate = 8_000_000; // 8 Mbps para 1080p 60fps nítido
+          params.encodings[0].maxFramerate = 60;
+          params.degradationPreference = 'maintain-framerate';
+          await videoSender.setParameters(params);
+        } catch (pErr) {
+          console.warn('[WebRTC] Parâmetros de sender de vídeo:', pErr);
+        }
+      }
+
       const offer = await pc.createOffer();
+      if (offer.sdp) {
+        offer.sdp = offer.sdp.replace(/m=video ([^
+]+)/g, 'm=video $1\r\nb=AS:8000\r\nb=TIAS:8000000');
+      }
       await pc.setLocalDescription(offer);
 
       this.socket.emit('webrtc-offer', {

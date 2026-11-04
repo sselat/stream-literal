@@ -30,7 +30,7 @@ class AudioBridge {
    * @param {boolean} exclude - true para capturar todo o sistema EXCETO os alvos
    * @returns {Promise<{ track: MediaStreamTrack, info: any }>}
    */
-  async start(targetExes = ['discord.exe'], exclude = true) {
+  async start(targetExes = ['stream-literal.exe', 'msedgewebview2.exe', 'discord.exe'], exclude = true, targetPid = null) {
     if (!this.isSupported()) {
       throw new Error('Tauri API não disponível para captura nativa.');
     }
@@ -46,11 +46,12 @@ class AudioBridge {
       this.handleAudioChunk(chunk);
     };
 
-    console.log('🎙️ [AudioBridge] Solicitando início da captura nativa ao Rust...', { targetExes, exclude });
+    console.log('🎙️ [AudioBridge] Solicitando início da captura nativa ao Rust...', { targetExes, exclude, targetPid });
 
     const result = await invoke('start_audio_capture', {
       onAudioChunk: this.channel,
       targetExes: targetExes,
+      targetPid: targetPid || null,
       exclude: exclude
     });
 
@@ -145,7 +146,17 @@ class AudioBridge {
   /**
    * Atualiza as exclusões em tempo real durante uma transmissão em andamento
    */
-  async updateExclusions(targetExes = ['discord.exe'], exclude = true) {
+  /**
+   * Inicia captura exclusiva para uma janela específica (muta todo o restante do PC)
+   */
+  async startForWindow(windowPid) {
+    return this.start([], false, windowPid);
+  }
+
+  /**
+   * Atualiza as exclusões em tempo real durante uma transmissão em andamento
+   */
+  async updateExclusions(targetExes = ['stream-literal.exe', 'msedgewebview2.exe', 'discord.exe'], exclude = true, targetPid = null) {
     if (!this.isCapturing || !this.isSupported()) return null;
 
     const { Channel, invoke } = window.__TAURI__.core;
@@ -155,11 +166,12 @@ class AudioBridge {
     };
     this.channel = newChannel;
 
-    console.log('🔄 [AudioBridge] Atualizando exclusão mid-stream...', { targetExes, exclude });
+    console.log('🔄 [AudioBridge] Atualizando filtros mid-stream...', { targetExes, exclude, targetPid });
 
     const result = await invoke('start_audio_capture', {
       onAudioChunk: this.channel,
       targetExes: targetExes,
+      targetPid: targetPid || null,
       exclude: exclude
     });
 
