@@ -964,6 +964,71 @@ body {
   transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), padding 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease, border-color 0.3s ease;
 }
 
+/* ========================================================
+   EDGE PANEL (MARCADOR LATERAL ESTILO ANDROID)
+   ======================================================== */
+.edge-panel-tab {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 35;
+  width: 20px;
+  height: 60px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  color: #94a3b8;
+  box-shadow: -3px 0 12px rgba(0, 0, 0, 0.45);
+  transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.2s ease,
+              border-color 0.2s ease,
+              color 0.2s ease,
+              box-shadow 0.2s ease,
+              opacity 0.3s ease;
+  user-select: none;
+}
+
+.edge-panel-tab:hover {
+  width: 26px;
+  background: rgba(30, 41, 59, 0.96);
+  border-color: rgba(129, 140, 248, 0.45);
+  color: #ffffff;
+  box-shadow: -5px 0 16px rgba(99, 102, 241, 0.35);
+}
+
+.edge-panel-tab:active {
+  transform: translateY(-50%) scale(0.96);
+}
+
+.edge-panel-tab svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
+}
+
+/* Quando o menu lateral está recolhido/oculto, a seta gira 180° e aponta para a esquerda (expandir) */
+.edge-panel-tab.collapsed svg {
+  transform: rotate(180deg);
+}
+
+/* Quando em reprodução de vídeo e cursor escondido por inatividade, esmaece suavemente */
+.spotlight-player-wrapper.hide-cursor ~ .edge-panel-tab {
+  opacity: 0.2;
+}
+
+.spotlight-player-wrapper.hide-cursor ~ .edge-panel-tab:hover {
+  opacity: 1;
+}
+
 /* Modo Cinema (Barra Lateral Recolhida) */
 .sidebar-streams.sidebar-collapsed {
   width: 0 !important;
@@ -997,27 +1062,7 @@ body {
   margin: 0;
 }
 
-.sidebar-toggle-btn {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.sidebar-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.09);
-  color: #fff;
-}
-.sidebar-toggle-btn svg {
-  width: 14px;
-  height: 14px;
-}
+
 
 .user-counter {
   background-color: var(--primary-light);
@@ -1328,36 +1373,7 @@ body {
   color: var(--primary);
 }
 
-/* Botão de Ação Ícone (Modo Cinema) */
-.dock-btn-icon {
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
 
-.dock-btn-icon:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.18);
-  transform: translateY(-1px);
-}
-
-.dock-btn-icon:active {
-  transform: translateY(0);
-}
-
-.dock-btn-icon svg {
-  width: 17px;
-  height: 17px;
-}
 
 /* Dica de Áudio Suave */
 .dock-tip {

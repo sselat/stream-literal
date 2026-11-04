@@ -237,14 +237,7 @@
               <span>Filtro de Áudio</span>
             </button>
 
-            <div class="dock-sep"></div>
 
-            <button id="btn-toggle-sidebar" class="dock-btn-icon" title="Modo Cinema (Ocultar/Exibir Barra Lateral)">
-              <svg id="icon-sidebar-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="15" y1="3" x2="15" y2="21"></line>
-              </svg>
-            </button>
           </nav>
 
           <div class="dock-tip">
@@ -252,6 +245,13 @@
             <span>Marque <strong>"Compartilhar áudio"</strong> no seletor para transmitir o som do seu PC</span>
           </div>
         </div>
+
+        <!-- Edge Panel Handle (Marcador Lateral estilo Android para expandir/ocultar menu) -->
+        <button id="btn-sidebar-edge-tab" class="edge-panel-tab" title="Ocultar menu lateral" aria-label="Ocultar menu lateral">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
 
       </section>
 
@@ -262,11 +262,7 @@
             <h3>Transmissões e Membros</h3>
             <span class="user-counter" id="connected-count-badge">0</span>
           </div>
-          <button id="btn-close-sidebar-header" class="sidebar-toggle-btn" title="Ocultar Barra Lateral">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-          </button>
+
         </div>
         
         <!-- Lista de Cards de Transmissões Ativas -->

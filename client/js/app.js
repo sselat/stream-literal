@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Elementos da Barra Lateral
   const sidebarStreams = document.getElementById('sidebar-streams');
-  const btnCloseSidebarHeader = document.getElementById('btn-close-sidebar-header');
+  const btnSidebarEdgeTab = document.getElementById('btn-sidebar-edge-tab');
   const connectedCountBadge = document.getElementById('connected-count-badge');
   const streamsThumbnailsContainer = document.getElementById('streams-thumbnails-container');
   const streamsEmptyNotice = document.getElementById('streams-empty-notice');
@@ -55,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const iconStartShare = document.getElementById('icon-start-share');
   const iconStopShare = document.getElementById('icon-stop-share');
   const btnToggleShareText = document.getElementById('btn-toggle-share-text');
-  const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
 
   // Elementos do Modal Admin
   const adminModal = document.getElementById('admin-modal');
@@ -676,26 +675,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Alternar Barra Lateral / Modo Cinema
+  // Alternar Barra Lateral / Modo Cinema (Edge Panel)
+  function updateEdgeTabState(isCollapsed) {
+    if (!btnSidebarEdgeTab) return;
+    btnSidebarEdgeTab.classList.toggle('collapsed', isCollapsed);
+    btnSidebarEdgeTab.title = isCollapsed ? 'Expandir menu lateral' : 'Ocultar menu lateral';
+    btnSidebarEdgeTab.setAttribute('aria-label', isCollapsed ? 'Expandir menu lateral' : 'Ocultar menu lateral');
+  }
+
   function toggleSidebar() {
     if (!sidebarStreams) return;
     const isCollapsed = sidebarStreams.classList.toggle('sidebar-collapsed');
+    updateEdgeTabState(isCollapsed);
     try {
       localStorage.setItem('stream_literal_sidebar_collapsed', isCollapsed ? '1' : '0');
     } catch (_) {}
   }
 
-  if (btnToggleSidebar) {
-    btnToggleSidebar.addEventListener('click', toggleSidebar);
-  }
-  if (btnCloseSidebarHeader) {
-    btnCloseSidebarHeader.addEventListener('click', toggleSidebar);
+  if (btnSidebarEdgeTab) {
+    btnSidebarEdgeTab.addEventListener('click', toggleSidebar);
   }
 
   // Restaura preferência salva da barra lateral
   try {
     if (localStorage.getItem('stream_literal_sidebar_collapsed') === '1') {
       sidebarStreams?.classList.add('sidebar-collapsed');
+      updateEdgeTabState(true);
     }
   } catch (_) {}
 
