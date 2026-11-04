@@ -82,9 +82,18 @@ pub fn run() {
                     match updater.check().await {
                         Ok(Some(update)) => {
                             log::info!("🚀 Nova versão encontrada: {}", update.version);
-                            if let Ok(_) = update.download_and_install(|_, _| {}, || {}).await {
-                                log::info!("✅ Atualização instalada com sucesso! Reiniciando aplicação...");
-                                handle.restart();
+                            match update.download_and_install(|chunk, total| {
+                                log::info!("Baixando atualização: {:?}/{:?}", chunk, total);
+                            }, || {
+                                log::info!("Download concluído!");
+                            }).await {
+                                Ok(_) => {
+                                    log::info!("✅ Atualização instalada com sucesso! Reiniciando aplicação...");
+                                    handle.restart();
+                                }
+                                Err(e) => {
+                                    log::error!("Erro ao baixar ou instalar atualização: {}", e);
+                                }
                             }
                         }
                         Ok(None) => {

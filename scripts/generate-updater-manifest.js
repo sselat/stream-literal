@@ -27,8 +27,9 @@ if (!sigFile || !exeFile) {
 }
 
 const signature = fs.readFileSync(path.join(nsisDir, sigFile), 'utf8').trim();
-const encodedExeName = encodeURIComponent(exeFile);
-const downloadUrl = `https://github.com/sselat/stream-literal/releases/download/${releaseTag}/${encodedExeName}`;
+// O GitHub Releases substitui espaços por pontos nos nomes dos arquivos anexados pela web
+const githubFileName = exeFile.replace(/ /g, '.');
+const downloadUrl = `https://github.com/sselat/stream-literal/releases/download/${releaseTag}/${githubFileName}`;
 
 const manifest = {
   version: version,
@@ -48,5 +49,5 @@ fs.writeFileSync(outputPath, JSON.stringify(manifest, null, 2), 'utf8');
 console.log('✅ Manifesto latest.json gerado com sucesso!');
 console.log('📁 Local:', outputPath);
 console.log('📦 Versão:', version);
-console.log('📄 Executável:', exeFile);
+console.log('📄 Executável no GitHub:', githubFileName);
 console.log('🔗 URL de Download:', downloadUrl);
