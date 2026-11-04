@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use windows::core::{implement, Interface, Ref, Result};
 use windows::Win32::Media::Audio::*;
-use windows::Win32::System::Com::BLOB;
+use windows::Win32::System::Com::{BLOB, CoTaskMemAlloc, CoTaskMemFree};
 use windows::Win32::System::Com::StructuredStorage::*;
 use windows::Win32::System::Variant::VT_BLOB;
 
@@ -105,23 +105,34 @@ impl AudioCaptureEngine {
 
     fn get_audio_client(target_pid: u32, exclude: bool) -> Result<IAudioClient> {
         if target_pid > 0 {
-            let mut params = AUDIOCLIENT_ACTIVATION_PARAMS {
-                ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
-                Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
-                    ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
-                        TargetProcessId: target_pid,
-                        ProcessLoopbackMode: if exclude {
-                            PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE
-                        } else {
-                            PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE
+            let size = std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>();
+            let p_mem = unsafe { CoTaskMemAlloc(size) } as *mut AUDIOCLIENT_ACTIVATION_PARAMS;
+            if p_mem.is_null() {
+                return Err(windows::core::Error::from(windows::core::HRESULT(-1)));
+            }
+
+            unsafe {
+                std::ptr::write(
+                    p_mem,
+                    AUDIOCLIENT_ACTIVATION_PARAMS {
+                        ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
+                        Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
+                            ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
+                                TargetProcessId: target_pid,
+                                ProcessLoopbackMode: if exclude {
+                                    PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE
+                                } else {
+                                    PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE
+                                },
+                            },
                         },
                     },
-                },
-            };
+                );
+            }
 
             let blob = BLOB {
-                cbSize: std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
-                pBlobData: &mut params as *mut _ as *mut u8,
+                cbSize: size as u32,
+                pBlobData: p_mem as *mut u8,
             };
 
             let prop = PROPVARIANT {
@@ -142,15 +153,23 @@ impl AudioCaptureEngine {
 
             unsafe {
                 let _async_op = ActivateAudioInterfaceAsync(
-                    windows::core::w!("VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK"),
+                    VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
                     &IAudioClient::IID,
                     Some(&prop),
                     &handler,
                 )?;
             }
 
-            rx.recv_timeout(Duration::from_secs(3))
-                .map_err(|_| windows::core::Error::from(windows::core::HRESULT(-1)))?
+            let res = rx
+                .recv_timeout(Duration::from_secs(3))
+                .map_err(|_| windows::core::Error::from(windows::core::HRESULT(-1)))??;
+
+            // Nota sobre gerenciamento de memória COM:
+            // A struct PROPVARIANT implementa Drop no crate `windows`, invocando PropVariantClear(&mut self).
+            // Para o tipo VT_BLOB, PropVariantClear executa CoTaskMemFree(blob.pBlobData).
+            // Como alocamos p_mem via CoTaskMemAlloc, o ponteiro é liberado de forma limpa e válida na heap COM,
+            // prevenindo o erro 0xc0000374 (STATUS_HEAP_CORRUPTION).
+            Ok(res)
         } else {
             Self::get_default_audio_client()
         }
@@ -317,9 +336,31 @@ impl AudioCaptureEngine {
             }
 
             let _ = audio_client.Stop();
+            CoTaskMemFree(Some(pwfx as *const _));
             println!("[AudioCaptureEngine] Captura finalizada com sucesso.");
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_process_loopback_activation() {
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(
+                None,
+                windows::Win32::System::Com::COINIT_MULTITHREADED,
+            );
+        }
+
+        // Se o Discord estiver em execução, valida a ativação sem erros e sem corrupção de heap
+        if let Some(pid) = crate::process::find_root_pid_for_exe("discord.exe") {
+            let client = AudioCaptureEngine::get_audio_client(pid, true);
+            assert!(client.is_ok(), "Falha ao ativar loopback para PID do Discord");
+        }
     }
 }
