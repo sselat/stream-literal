@@ -16,13 +16,13 @@ if (!fs.existsSync(nsisDir)) {
   process.exit(1);
 }
 
-// Procura o arquivo .sig e o .exe gerados
+// Procura o arquivo .sig e o .exe gerados correspondentes à versão atual
 const files = fs.readdirSync(nsisDir);
-const sigFile = files.find(f => f.endsWith('.exe.sig'));
-const exeFile = files.find(f => f.endsWith('.exe') && !f.endsWith('.sig'));
+const sigFile = files.find(f => f.includes(version) && f.endsWith('.exe.sig'));
+const exeFile = files.find(f => f.includes(version) && f.endsWith('.exe') && !f.endsWith('.sig'));
 
 if (!sigFile || !exeFile) {
-  console.error('❌ Arquivos do instalador ou assinatura (.sig) não foram encontrados em:', nsisDir);
+  console.error(`❌ Arquivos do instalador ou assinatura (.sig) para a versão ${version} não foram encontrados em:`, nsisDir);
   process.exit(1);
 }
 
@@ -48,4 +48,5 @@ fs.writeFileSync(outputPath, JSON.stringify(manifest, null, 2), 'utf8');
 console.log('✅ Manifesto latest.json gerado com sucesso!');
 console.log('📁 Local:', outputPath);
 console.log('📦 Versão:', version);
+console.log('📄 Executável:', exeFile);
 console.log('🔗 URL de Download:', downloadUrl);
