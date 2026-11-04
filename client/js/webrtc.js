@@ -155,23 +155,32 @@ class WebRTCManager {
       try {
         const settings = videoTrack?.getSettings ? videoTrack.getSettings() : {};
         const isWindow = settings.displaySurface === 'window';
-        let windowPid = null;
+        let windowApp = null;
 
         if (isWindow && videoTrack?.label && window.__TAURI__?.core?.invoke) {
           try {
-            windowPid = await window.__TAURI__.core.invoke('get_pid_from_window', { label: videoTrack.label });
-            console.log('🪟 [WebRTC] Janela selecionada com PID detectado:', windowPid, 'Label:', videoTrack.label);
+            windowApp = await window.__TAURI__.core.invoke('detect_window_app', { label: videoTrack.label });
+            console.log('🪟 [WebRTC] Janela detectada:', windowApp, 'Label original:', videoTrack.label);
           } catch (wErr) {
-            console.warn('Não foi possível obter PID da janela:', wErr);
+            console.warn('Não foi possível obter dados da janela:', wErr);
           }
         }
 
+        this.currentCaptureMode = {
+          isWindow: isWindow,
+          app: windowApp
+        };
+
+        if (typeof window.onCaptureModeChanged === 'function') {
+          window.onCaptureModeChanged(this.currentCaptureMode);
+        }
+
         let audioResult = null;
-        if (isWindow && windowPid) {
+        if (isWindow && windowApp?.pid) {
           // Modo Janela Exclusivo: captura APENAS o som deste aplicativo e silencia todo o restante do PC!
-          audioResult = await window.AudioBridge.startForWindow(windowPid);
+          audioResult = await window.AudioBridge.startForWindow(windowApp.pid);
           if (this.onNotice) {
-            this.onNotice('Transmissão de janela iniciada! Capturando exclusivamente o áudio deste aplicativo.', 'info');
+            this.onNotice(`Modo Janela Ativo! Transmitindo exclusivamente o som de "${windowApp.display_name}". Todo o restante do PC está silenciado.`, 'info');
           }
         } else {
           // Modo Tela Inteira: captura som do sistema com exclusão segura de Stream Literal e Discord
@@ -413,6 +422,11 @@ class WebRTCManager {
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;
+    }
+
+    this.currentCaptureMode = null;
+    if (typeof window.onCaptureModeChanged === 'function') {
+      window.onCaptureModeChanged(null);
     }
 
     this.isSharingScreen = false;

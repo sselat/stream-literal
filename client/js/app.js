@@ -999,11 +999,74 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  window.onCaptureModeChanged = function() {
+    if (audioSettingsModal && audioSettingsModal.style.display !== 'none') {
+      loadAudioApps();
+    }
+  };
+
   function renderAudioAppsList(apps, ignored) {
     audioAppsList.innerHTML = '';
 
+    const isSharing = webrtc && webrtc.isSharingScreen;
+    const captureMode = webrtc?.currentCaptureMode;
+    const isWindowMode = isSharing && captureMode?.isWindow;
+    const windowApp = captureMode?.app;
+
+    if (isWindowMode) {
+      const appName = windowApp?.display_name || windowApp?.exe_name || 'Janela Selecionada';
+      const banner = document.createElement('div');
+      banner.className = 'audio-mode-banner banner-window';
+      banner.innerHTML = `
+        <div class="banner-icon">🪟</div>
+        <div>
+          <div class="banner-title">Modo Janela Ativo</div>
+          Transmitindo exclusivamente o som de <strong>${escapeHtml(appName)}</strong>. Todo o restante do seu computador está silenciado na transmissão.
+        </div>
+      `;
+      audioAppsList.appendChild(banner);
+    } else if (isSharing) {
+      const banner = document.createElement('div');
+      banner.className = 'audio-mode-banner banner-screen';
+      banner.innerHTML = `
+        <div class="banner-icon">🖥️</div>
+        <div>
+          <div class="banner-title">Modo Tela Inteira Ativo</div>
+          Transmitindo áudio geral do sistema. Os programas marcados abaixo estão sendo silenciados em tempo real contra eco.
+        </div>
+      `;
+      audioAppsList.appendChild(banner);
+    }
+
     const allExesMap = new Map();
     apps.forEach(a => allExesMap.set(a.exe_name.toLowerCase(), a));
+
+    // Garante que Stream Literal e WebView2 sempre estejam visíveis e marcados como protegidos
+    if (!allExesMap.has('stream-literal.exe')) {
+      allExesMap.set('stream-literal.exe', {
+        name: 'Stream Literal',
+        exe_name: 'stream-literal.exe',
+        icon_hint: 'shield',
+        pid: 0
+      });
+    } else {
+      const sl = allExesMap.get('stream-literal.exe');
+      sl.name = 'Stream Literal';
+      sl.icon_hint = 'shield';
+    }
+
+    if (!allExesMap.has('msedgewebview2.exe')) {
+      allExesMap.set('msedgewebview2.exe', {
+        name: 'Interface do App (WebView2)',
+        exe_name: 'msedgewebview2.exe',
+        icon_hint: 'shield',
+        pid: 0
+      });
+    } else {
+      const wv = allExesMap.get('msedgewebview2.exe');
+      wv.name = 'Interface do App (WebView2)';
+      wv.icon_hint = 'shield';
+    }
 
     ignored.forEach(exe => {
       const lower = exe.toLowerCase();
@@ -1017,58 +1080,102 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    // Se estiver em modo janela e tivermos o app detectado, assegura que ele esteja no mapa
+    if (isWindowMode && windowApp?.exe_name) {
+      const targetLower = windowApp.exe_name.toLowerCase();
+      if (!allExesMap.has(targetLower)) {
+        allExesMap.set(targetLower, {
+          name: windowApp.display_name || windowApp.exe_name,
+          exe_name: windowApp.exe_name,
+          icon_hint: 'game',
+          pid: windowApp.pid || 0
+        });
+      }
+    }
+
     const mergedList = Array.from(allExesMap.values());
     mergedList.sort((a, b) => {
-      const aIgnored = ignored.includes(a.exe_name.toLowerCase()) ? 0 : 1;
-      const bIgnored = ignored.includes(b.exe_name.toLowerCase()) ? 0 : 1;
+      const aLower = a.exe_name.toLowerCase();
+      const bLower = b.exe_name.toLowerCase();
+
+      // Em modo janela, a aplicação capturada fica em 1º lugar absoluto
+      if (isWindowMode && windowApp?.exe_name) {
+        const targetLower = windowApp.exe_name.toLowerCase();
+        if (aLower === targetLower) return -1;
+        if (bLower === targetLower) return 1;
+      }
+
+      // Processos protegidos nativos (Stream Literal e WebView2) vêm logo a seguir
+      const aIsProtected = aLower === 'stream-literal.exe' || aLower === 'msedgewebview2.exe';
+      const bIsProtected = bLower === 'stream-literal.exe' || bLower === 'msedgewebview2.exe';
+      if (aIsProtected && !bIsProtected) return -1;
+      if (!aIsProtected && bIsProtected) return 1;
+
+      const aIgnored = ignored.includes(aLower) ? 0 : 1;
+      const bIgnored = ignored.includes(bLower) ? 0 : 1;
       return aIgnored - bIgnored || a.name.localeCompare(b.name);
     });
 
-    // Oculta processos internos do próprio Stream Literal da lista visual do usuário
-    const visibleApps = mergedList.filter(app => {
+    mergedList.forEach(app => {
       const low = app.exe_name.toLowerCase();
-      return low !== 'stream-literal.exe' && low !== 'msedgewebview2.exe';
-    });
+      const isProtected = low === 'stream-literal.exe' || low === 'msedgewebview2.exe';
+      const isTargetWindow = isWindowMode && windowApp?.exe_name && low === windowApp.exe_name.toLowerCase();
+      const isChecked = isProtected || isWindowMode || ignored.includes(low);
 
-    visibleApps.forEach(app => {
-      const isChecked = ignored.includes(app.exe_name.toLowerCase());
       const item = document.createElement('div');
-      item.className = `audio-app-item ${isChecked ? 'selected' : ''}`;
+      item.className = `audio-app-item ${isChecked ? 'selected' : ''} ${isTargetWindow ? 'capturing' : ''}`;
 
       let iconEmoji = '🎮';
-      if (app.icon_hint === 'discord') iconEmoji = '💬';
+      if (app.icon_hint === 'shield') iconEmoji = '🛡️';
+      else if (app.icon_hint === 'discord') iconEmoji = '💬';
       else if (app.icon_hint === 'spotify') iconEmoji = '🎵';
       else if (app.icon_hint === 'browser') iconEmoji = '🌐';
       else if (app.icon_hint === 'steam') iconEmoji = '🕹️';
 
+      let tagHtml = '';
+      let statusSub = app.pid ? `(PID: ${app.pid})` : (isProtected ? '(Sistema)' : '(Fechado)');
+
+      if (isTargetWindow) {
+        tagHtml = '<span class="app-capturing-tag">🔊 Transmitindo Áudio</span>';
+        statusSub = '(Janela Ativa em Transmissão)';
+      } else if (isProtected) {
+        tagHtml = '<span class="app-ignored-tag system-shield">🛡️ Silenciado (Anti-Eco)</span>';
+      } else if (isWindowMode) {
+        tagHtml = '<span class="app-ignored-tag window-muted">🔇 Silenciado (Modo Janela)</span>';
+      } else if (isChecked) {
+        tagHtml = '<span class="app-ignored-tag">Silenciado</span>';
+      }
+
       item.innerHTML = `
-        <input type="checkbox" ${isChecked ? 'checked' : ''} data-exe="${escapeHtml(app.exe_name)}">
+        <input type="checkbox" ${isChecked ? 'checked' : ''} ${isProtected || isWindowMode ? 'disabled' : ''} data-exe="${escapeHtml(app.exe_name)}">
         <div class="app-icon-badge icon-${app.icon_hint}">
           ${iconEmoji}
         </div>
         <div class="app-info-col">
           <span class="app-info-name">${escapeHtml(app.name)}</span>
-          <span class="app-info-exe">${escapeHtml(app.exe_name)} ${app.pid ? `(PID: ${app.pid})` : '(Fechado)'}</span>
+          <span class="app-info-exe">${escapeHtml(app.exe_name)} ${statusSub}</span>
         </div>
-        ${isChecked ? '<span class="app-ignored-tag">Silenciado</span>' : ''}
+        ${tagHtml}
       `;
 
-      const chk = item.querySelector('input[type="checkbox"]');
-      item.addEventListener('click', (e) => {
-        if (e.target !== chk) {
-          chk.checked = !chk.checked;
-        }
-        item.classList.toggle('selected', chk.checked);
-        let tag = item.querySelector('.app-ignored-tag');
-        if (chk.checked && !tag) {
-          const span = document.createElement('span');
-          span.className = 'app-ignored-tag';
-          span.textContent = 'Silenciado';
-          item.appendChild(span);
-        } else if (!chk.checked && tag) {
-          tag.remove();
-        }
-      });
+      if (!isProtected && !isWindowMode) {
+        const chk = item.querySelector('input[type="checkbox"]');
+        item.addEventListener('click', (e) => {
+          if (e.target !== chk) {
+            chk.checked = !chk.checked;
+          }
+          item.classList.toggle('selected', chk.checked);
+          let tag = item.querySelector('.app-ignored-tag');
+          if (chk.checked && !tag) {
+            const span = document.createElement('span');
+            span.className = 'app-ignored-tag';
+            span.textContent = 'Silenciado';
+            item.appendChild(span);
+          } else if (!chk.checked && tag) {
+            tag.remove();
+          }
+        });
+      }
 
       audioAppsList.appendChild(item);
     });

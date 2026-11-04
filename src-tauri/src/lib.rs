@@ -29,6 +29,22 @@ fn get_pid_from_window(label: String) -> Option<u32> {
 }
 
 #[tauri::command]
+fn detect_window_app(label: String) -> Option<process::WindowDetectResult> {
+    process::find_pid_and_exe_by_title_or_hwnd(&label).map(|(pid, exe_name)| {
+        let display_name = exe_name
+            .strip_suffix(".exe")
+            .or_else(|| exe_name.strip_suffix(".EXE"))
+            .unwrap_or(&exe_name)
+            .to_string();
+        process::WindowDetectResult {
+            pid,
+            exe_name,
+            display_name,
+        }
+    })
+}
+
+#[tauri::command]
 fn start_audio_capture(
     state: State<'_, AppState>,
     on_audio_chunk: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
@@ -155,6 +171,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_audio_apps,
             get_pid_from_window,
+            detect_window_app,
             start_audio_capture,
             stop_audio_capture,
             get_app_version,

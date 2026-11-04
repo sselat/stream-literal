@@ -1881,6 +1881,78 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
+/* Banners informativos de modo de captura no modal de áudio */
+.audio-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.audio-mode-banner .banner-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+.audio-mode-banner.banner-window {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #a7f3d0;
+}
+
+.audio-mode-banner.banner-window .banner-title {
+  font-weight: 700;
+  color: #34d399;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.audio-mode-banner.banner-screen {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #c7d2fe;
+}
+
+.audio-mode-banner.banner-screen .banner-title {
+  font-weight: 700;
+  color: #818cf8;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+/* Tag e destaque de transmissão exclusiva em modo janela */
+.app-capturing-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(16, 185, 129, 0.25);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  letter-spacing: 0.02em;
+}
+
+.audio-app-item.capturing {
+  border-color: rgba(16, 185, 129, 0.6) !important;
+  background: rgba(16, 185, 129, 0.09) !important;
+}
+
+.app-ignored-tag.system-shield {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.45);
+}
+
+.app-ignored-tag.window-muted {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
 .custom-exe-row {
   display: flex;
   gap: 8px;
