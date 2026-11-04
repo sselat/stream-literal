@@ -280,8 +280,7 @@ class WebRTCManager {
 
       const offer = await pc.createOffer();
       if (offer.sdp) {
-        offer.sdp = offer.sdp.replace(/m=video ([^
-]+)/g, 'm=video $1\r\nb=AS:8000\r\nb=TIAS:8000000');
+        offer.sdp = offer.sdp.replace(/(m=video[^\r\n]*)/g, "$1\r\nb=AS:8000\r\nb=TIAS:8000000");
       }
       await pc.setLocalDescription(offer);
 
