@@ -587,6 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Atualização do ícone ao entrar/sair de fullscreen (inclusive via tecla ESC)
   document.addEventListener('fullscreenchange', () => {
     const isFullscreen = !!document.fullscreenElement;
+    document.body.classList.toggle('is-fullscreen', isFullscreen);
     if (isFullscreen) {
       iconFullscreenEnter.style.display = 'none';
       iconFullscreenExit.style.display = 'block';
@@ -596,6 +597,11 @@ document.addEventListener('DOMContentLoaded', () => {
       iconFullscreenExit.style.display = 'none';
       btnSpotlightFullscreen.title = 'Tela Cheia';
     }
+  });
+
+  // Duplo clique no vídeo para alternar tela cheia de forma natural
+  spotlightVideo.addEventListener('dblclick', () => {
+    btnSpotlightFullscreen.click();
   });
 
   // Picture-in-Picture
@@ -1147,6 +1153,55 @@ document.addEventListener('DOMContentLoaded', () => {
     return str.replace(/[&<>'"]/g, 
       tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
     );
+  }
+
+
+  // ========================================================
+  // NOTIFICAÇÃO ELEGANTE DE ATUALIZAÇÃO AUTOMÁTICA (TAURI)
+  // ========================================================
+  function showUpdaterToast(payload) {
+    let toast = document.getElementById('updater-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'updater-toast';
+      toast.className = 'updater-toast';
+      document.body.appendChild(toast);
+    }
+
+    if (payload.stage === 'downloading') {
+      toast.innerHTML = `
+        <div class="updater-toast-content">
+          <div class="updater-spinner"></div>
+          <div class="updater-texts">
+            <div class="updater-title">Nova versão encontrada (v${payload.version})</div>
+            <div class="updater-desc">Baixando melhorias em segundo plano...</div>
+          </div>
+        </div>
+      `;
+      toast.classList.add('visible');
+    } else if (payload.stage === 'ready') {
+      toast.innerHTML = `
+        <div class="updater-toast-content">
+          <span class="updater-icon-check">✨</span>
+          <div class="updater-texts">
+            <div class="updater-title">Atualização v${payload.version} pronta!</div>
+            <div class="updater-desc">Reiniciando aplicação em 3 segundos...</div>
+          </div>
+        </div>
+        <div class="updater-progress-bar"><div class="updater-progress-fill"></div></div>
+      `;
+      toast.classList.add('visible');
+    } else if (payload.stage === 'error') {
+      toast.classList.remove('visible');
+    }
+  }
+
+  if (window.__TAURI__ && window.__TAURI__.event) {
+    window.__TAURI__.event.listen('updater:status', (event) => {
+      if (event && event.payload) {
+        showUpdaterToast(event.payload);
+      }
+    });
   }
 
   // Início

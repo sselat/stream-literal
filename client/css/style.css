@@ -1940,3 +1940,132 @@ body {
     flex-direction: column;
   }
 }
+
+
+/* Clareia o ícone nativo de revelar senha do WebView2/Edge no tema escuro */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  filter: invert(0.85);
+  cursor: pointer;
+}
+
+
+/* ========================================================
+   MODO TELA CHEIA IMERSIVO (OCULTA CONTROLES GERAIS)
+   ======================================================== */
+body.is-fullscreen .floating-dock-container,
+body.is-fullscreen .edge-panel-tab,
+body.is-fullscreen .main-header,
+:fullscreen .floating-dock-container,
+:fullscreen ~ .floating-dock-container,
+:fullscreen .edge-panel-tab,
+:fullscreen ~ .edge-panel-tab {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Quando houver transmissão no spotlight e mouse inativo, recolhe dock */
+.spotlight-player-wrapper:not([style*="display: none"]) ~ .floating-dock-container {
+  opacity: 0.15;
+  transform: translateX(-50%) translateY(14px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.spotlight-player-wrapper:not([style*="display: none"]) ~ .floating-dock-container:hover,
+.spotlight-player-wrapper.user-active ~ .floating-dock-container {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ========================================================
+   TOAST ELEGANTE DO AUTO-UPDATER
+   ======================================================== */
+.updater-toast {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 99999;
+  background: rgba(13, 17, 23, 0.92);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-shadow: 
+    0 12px 32px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(99, 102, 241, 0.2);
+  border-radius: 12px;
+  padding: 14px 18px;
+  color: #f1f5f9;
+  font-family: inherit;
+  min-width: 300px;
+  max-width: 380px;
+  opacity: 0;
+  transform: translateY(-16px) scale(0.96);
+  pointer-events: none;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.updater-toast.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.updater-toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.updater-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.updater-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.updater-desc {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.updater-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid rgba(99, 102, 241, 0.25);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.updater-icon-check {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.updater-progress-bar {
+  margin-top: 10px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.updater-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  animation: updaterCountdown 3s linear forwards;
+}
+
+@keyframes updaterCountdown {
+  from { width: 0%; }
+  to { width: 100%; }
+}

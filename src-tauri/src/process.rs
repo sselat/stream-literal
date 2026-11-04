@@ -1,20 +1,18 @@
-use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use windows::core::Interface;
 use windows::Win32::Foundation::*;
-use windows::Win32::System::Com::*;
 use windows::Win32::Media::Audio::*;
+use windows::Win32::System::Com::*;
 use windows::Win32::System::Diagnostics::ToolHelp::*;
 
 #[allow(unused_imports)]
 use windows::Win32::Media::Audio::{
-    AUDIOCLIENT_ACTIVATION_PARAMS,
+    ActivateAudioInterfaceAsync, IActivateAudioInterfaceAsyncOperation,
+    IActivateAudioInterfaceCompletionHandler, AUDIOCLIENT_ACTIVATION_PARAMS,
     AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
-    PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
     PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE,
-    ActivateAudioInterfaceAsync,
-    IActivateAudioInterfaceAsyncOperation,
-    IActivateAudioInterfaceCompletionHandler,
+    PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -41,10 +39,16 @@ pub fn find_root_pid_for_exe(exe_name: &str) -> Option<u32> {
 
         if Process32FirstW(snapshot, &mut entry).is_ok() {
             loop {
-                let null_pos = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                let null_pos = entry
+                    .szExeFile
+                    .iter()
+                    .position(|&c| c == 0)
+                    .unwrap_or(entry.szExeFile.len());
                 let cur_exe = String::from_utf16_lossy(&entry.szExeFile[..null_pos]).to_lowercase();
 
-                if cur_exe == lower_target || (lower_target.ends_with(".exe") && cur_exe == lower_target) {
+                if cur_exe == lower_target
+                    || (lower_target.ends_with(".exe") && cur_exe == lower_target)
+                {
                     matching_processes.push((entry.th32ProcessID, entry.th32ParentProcessID));
                 }
 
@@ -85,9 +89,13 @@ pub fn get_audio_session_pids() -> HashSet<u32> {
     let mut pids = HashSet::new();
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        if let Ok(enumerator) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) {
+        if let Ok(enumerator) =
+            CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL)
+        {
             if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia) {
-                if let Ok(session_manager) = device.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None) {
+                if let Ok(session_manager) =
+                    device.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None)
+                {
                     if let Ok(session_enum) = session_manager.GetSessionEnumerator() {
                         let count = session_enum.GetCount().unwrap_or(0);
                         for i in 0..count {
@@ -117,31 +125,97 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
 
     // Aplicativos de voz, mídia e jogos que sempre devem aparecer se estiverem abertos
     let always_show_exes = [
-        "discord.exe", "spotify.exe", "steam.exe", "opera.exe", "chrome.exe",
-        "msedge.exe", "firefox.exe", "brave.exe", "whatsapp.root.exe", "leagueclient.exe",
-        "leagueclientux.exe", "riot client.exe", "cs2.exe", "valorant.exe"
+        "discord.exe",
+        "spotify.exe",
+        "steam.exe",
+        "opera.exe",
+        "chrome.exe",
+        "msedge.exe",
+        "firefox.exe",
+        "brave.exe",
+        "whatsapp.root.exe",
+        "leagueclient.exe",
+        "leagueclientux.exe",
+        "riot client.exe",
+        "cs2.exe",
+        "valorant.exe",
     ];
 
     // Processos de sistema e antivírus a ignorar mesmo que toquem notificações do sistema
     let system_ignore = [
-        "system", "registry", "smss.exe", "csrss.exe", "wininit.exe", "services.exe",
-        "lsass.exe", "svchost.exe", "fontdrvhost.exe", "dwm.exe", "memory compression",
-        "spoolsv.exe", "taskhostw.exe", "shellexperiencehost.exe",
-        "searchhost.exe", "startmenuexperiencehost.exe", "textinputhost.exe",
-        "applicationframehost.exe", "systemsettings.exe", "runtimebroker.exe",
-        "sihost.exe", "ctfmon.exe", "securityhealthservice.exe", "smartscreen.exe",
-        "audiodg.exe", "conhost.exe", "dllhost.exe", "wudfhost.exe", "searchindexer.exe",
-        "winlogon.exe", "lsaiso.exe", "wmiprvse.exe", "dashost.exe", "unsecapp.exe",
-        "aggregatorhost.exe", "shellhost.exe", "useroobebroker.exe", "lockapp.exe",
-        "monotificationux.exe", "crossdeviceresume.exe", "gameinputrawinputproxy.exe",
-        "gamebarpresencewriter.exe", "vgc.exe", "vgtray.exe", "sqlwriter.exe",
-        "secure system", "wsc_proxy.exe", "vctip.exe", "cmd.exe", "powershell.exe",
-        "cargo.exe", "language_server.exe", "model_host.exe", "tiworker.exe",
-        "trustedinstaller.exe", "cleanmgr.exe", "dismhost.exe", "git.exe",
-        "mousocoreworker.exe", "nortonui.exe", "aswengsrv.exe", "aswidsagent.exe",
-        "afwserv.exe", "scpbradguard.exe", "scpbradserv.exe", "lghub_agent.exe",
-        "lghub_system_tray.exe", "nvcontainer.exe", "nvdisplay.container.exe",
-        "openrgb.exe", "turzx.exe", "jucheck.exe", "jusched.exe"
+        "system",
+        "registry",
+        "smss.exe",
+        "csrss.exe",
+        "wininit.exe",
+        "services.exe",
+        "lsass.exe",
+        "svchost.exe",
+        "fontdrvhost.exe",
+        "dwm.exe",
+        "memory compression",
+        "spoolsv.exe",
+        "taskhostw.exe",
+        "shellexperiencehost.exe",
+        "searchhost.exe",
+        "startmenuexperiencehost.exe",
+        "textinputhost.exe",
+        "applicationframehost.exe",
+        "systemsettings.exe",
+        "runtimebroker.exe",
+        "sihost.exe",
+        "ctfmon.exe",
+        "securityhealthservice.exe",
+        "smartscreen.exe",
+        "audiodg.exe",
+        "conhost.exe",
+        "dllhost.exe",
+        "wudfhost.exe",
+        "searchindexer.exe",
+        "winlogon.exe",
+        "lsaiso.exe",
+        "wmiprvse.exe",
+        "dashost.exe",
+        "unsecapp.exe",
+        "aggregatorhost.exe",
+        "shellhost.exe",
+        "useroobebroker.exe",
+        "lockapp.exe",
+        "monotificationux.exe",
+        "crossdeviceresume.exe",
+        "gameinputrawinputproxy.exe",
+        "gamebarpresencewriter.exe",
+        "vgc.exe",
+        "vgtray.exe",
+        "sqlwriter.exe",
+        "secure system",
+        "wsc_proxy.exe",
+        "vctip.exe",
+        "cmd.exe",
+        "powershell.exe",
+        "cargo.exe",
+        "language_server.exe",
+        "model_host.exe",
+        "tiworker.exe",
+        "trustedinstaller.exe",
+        "cleanmgr.exe",
+        "dismhost.exe",
+        "git.exe",
+        "mousocoreworker.exe",
+        "nortonui.exe",
+        "aswengsrv.exe",
+        "aswidsagent.exe",
+        "afwserv.exe",
+        "scpbradguard.exe",
+        "scpbradserv.exe",
+        "lghub_agent.exe",
+        "lghub_system_tray.exe",
+        "nvcontainer.exe",
+        "nvdisplay.container.exe",
+        "openrgb.exe",
+        "turzx.exe",
+        "jucheck.exe",
+        "jusched.exe",
     ];
 
     unsafe {
@@ -153,7 +227,11 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
 
             if Process32FirstW(snapshot, &mut entry).is_ok() {
                 loop {
-                    let null_pos = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                    let null_pos = entry
+                        .szExeFile
+                        .iter()
+                        .position(|&c| c == 0)
+                        .unwrap_or(entry.szExeFile.len());
                     let exe_name = String::from_utf16_lossy(&entry.szExeFile[..null_pos]);
                     let lower_exe = exe_name.to_lowercase();
                     let pid = entry.th32ProcessID;
@@ -188,7 +266,10 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
                                 "browser".to_string()
                             } else if lower_exe.contains("steam") {
                                 "steam".to_string()
-                            } else if lower_exe.contains("league") || lower_exe.contains("riot") || lower_exe.contains("game") {
+                            } else if lower_exe.contains("league")
+                                || lower_exe.contains("riot")
+                                || lower_exe.contains("game")
+                            {
                                 "game".to_string()
                             } else {
                                 "app".to_string()
@@ -200,7 +281,8 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
                                 "Spotify".to_string()
                             } else if lower_exe == "chrome.exe" {
                                 "Google Chrome".to_string()
-                            } else if lower_exe == "msedge.exe" || lower_exe == "msedgewebview2.exe" {
+                            } else if lower_exe == "msedge.exe" || lower_exe == "msedgewebview2.exe"
+                            {
                                 "Microsoft Edge".to_string()
                             } else if lower_exe == "firefox.exe" {
                                 "Mozilla Firefox".to_string()
@@ -215,7 +297,10 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
                             } else if lower_exe.contains("whatsapp") {
                                 "WhatsApp".to_string()
                             } else {
-                                exe_name.strip_suffix(".exe").unwrap_or(&exe_name).to_string()
+                                exe_name
+                                    .strip_suffix(".exe")
+                                    .unwrap_or(&exe_name)
+                                    .to_string()
                             };
 
                             apps.push(AudioAppInfo {
@@ -239,9 +324,23 @@ pub fn list_active_applications() -> Vec<AudioAppInfo> {
 
     // Ordenação amigável: Discord e Spotify em destaque no topo, seguidos por ordem alfabética
     apps.sort_by(|a, b| {
-        let a_prio = if a.icon_hint == "discord" { 0 } else if a.icon_hint == "spotify" { 1 } else { 2 };
-        let b_prio = if b.icon_hint == "discord" { 0 } else if b.icon_hint == "spotify" { 1 } else { 2 };
-        a_prio.cmp(&b_prio).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        let a_prio = if a.icon_hint == "discord" {
+            0
+        } else if a.icon_hint == "spotify" {
+            1
+        } else {
+            2
+        };
+        let b_prio = if b.icon_hint == "discord" {
+            0
+        } else if b.icon_hint == "spotify" {
+            1
+        } else {
+            2
+        };
+        a_prio
+            .cmp(&b_prio)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
 
     apps
@@ -262,7 +361,10 @@ mod tests {
         let apps = list_active_applications();
         println!("\n=== Cleaned Active User Apps ({} apps) ===", apps.len());
         for app in &apps {
-            println!("- [{}] {} ({}) | PID: {}", app.icon_hint, app.name, app.exe_name, app.pid);
+            println!(
+                "- [{}] {} ({}) | PID: {}",
+                app.icon_hint, app.name, app.exe_name, app.pid
+            );
         }
         println!("==============================================\n");
         assert!(!apps.is_empty(), "Should find active running processes");

@@ -1,9 +1,9 @@
 mod audio_capture;
 mod process;
 
-use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use std::sync::Mutex;
+use tauri::{Emitter, Manager, State};
 
 pub struct AppState {
     pub audio_engine: Mutex<audio_capture::AudioCaptureEngine>,
@@ -70,6 +70,13 @@ pub fn run() {
     };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .manage(app_state)
         .plugin(tauri_plugin_log::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -81,18 +88,29 @@ pub fn run() {
                 if let Ok(updater) = handle.updater() {
                     match updater.check().await {
                         Ok(Some(update)) => {
-                            log::info!("🚀 Nova versão encontrada: {}", update.version);
-                            match update.download_and_install(|chunk, total| {
-                                log::info!("Baixando atualização: {:?}/{:?}", chunk, total);
-                            }, || {
-                                log::info!("Download concluído!");
-                            }).await {
+                            let new_ver = update.version.clone();
+                            log::info!("🚀 Nova versão encontrada: {}", new_ver);
+                            let _ = handle.emit("updater:status", serde_json::json!({
+                                "stage": "downloading",
+                                "version": new_ver
+                            }));
+
+                            match update.download_and_install(|_chunk, _total| {}, || {}).await {
                                 Ok(_) => {
-                                    log::info!("✅ Atualização instalada com sucesso! Reiniciando aplicação...");
+                                    log::info!("✅ Atualização instalada com sucesso! Reiniciando aplicação em 3s...");
+                                    let _ = handle.emit("updater:status", serde_json::json!({
+                                        "stage": "ready",
+                                        "version": new_ver
+                                    }));
+                                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                                     handle.restart();
                                 }
                                 Err(e) => {
                                     log::error!("Erro ao baixar ou instalar atualização: {}", e);
+                                    let _ = handle.emit("updater:status", serde_json::json!({
+                                        "stage": "error",
+                                        "error": e.to_string()
+                                    }));
                                 }
                             }
                         }

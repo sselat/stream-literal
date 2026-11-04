@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use windows::core::{implement, Interface, Ref, Result};
 use windows::Win32::Media::Audio::*;
-use windows::Win32::System::Com::{BLOB, CoTaskMemAlloc, CoTaskMemFree};
 use windows::Win32::System::Com::StructuredStorage::*;
+use windows::Win32::System::Com::{CoTaskMemAlloc, CoTaskMemFree, BLOB};
 use windows::Win32::System::Variant::VT_BLOB;
 
 #[implement(IActivateAudioInterfaceCompletionHandler)]
@@ -83,14 +83,13 @@ impl AudioCaptureEngine {
                 );
             }
 
-            if let Err(e) = Self::run_loopback_thread(
-                target_pid,
-                exclude,
-                channel,
-                is_running_clone,
-                init_tx,
-            ) {
-                eprintln!("[AudioCaptureEngine] Thread de captura finalizada com erro: {:?}", e);
+            if let Err(e) =
+                Self::run_loopback_thread(target_pid, exclude, channel, is_running_clone, init_tx)
+            {
+                eprintln!(
+                    "[AudioCaptureEngine] Thread de captura finalizada com erro: {:?}",
+                    e
+                );
             }
 
             unsafe {
@@ -177,12 +176,11 @@ impl AudioCaptureEngine {
 
     fn get_default_audio_client() -> Result<IAudioClient> {
         unsafe {
-            let enumerator: IMMDeviceEnumerator =
-                windows::Win32::System::Com::CoCreateInstance(
-                    &MMDeviceEnumerator,
-                    None,
-                    windows::Win32::System::Com::CLSCTX_ALL,
-                )?;
+            let enumerator: IMMDeviceEnumerator = windows::Win32::System::Com::CoCreateInstance(
+                &MMDeviceEnumerator,
+                None,
+                windows::Win32::System::Com::CLSCTX_ALL,
+            )?;
             let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)?;
             device.Activate(windows::Win32::System::Com::CLSCTX_ALL, None)
         }
@@ -238,14 +236,14 @@ impl AudioCaptureEngine {
             // Em clientes criados por ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK),
             // a chamada client.GetMixFormat() retorna E_NOTIMPL (0x80004001).
             // Portanto, consultamos o formato de mixagem do endpoint padrão ativo no Windows.
-            let enumerator: IMMDeviceEnumerator =
-                windows::Win32::System::Com::CoCreateInstance(
-                    &MMDeviceEnumerator,
-                    None,
-                    windows::Win32::System::Com::CLSCTX_ALL,
-                )?;
+            let enumerator: IMMDeviceEnumerator = windows::Win32::System::Com::CoCreateInstance(
+                &MMDeviceEnumerator,
+                None,
+                windows::Win32::System::Com::CLSCTX_ALL,
+            )?;
             let default_device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)?;
-            let default_client: IAudioClient = default_device.Activate(windows::Win32::System::Com::CLSCTX_ALL, None)?;
+            let default_client: IAudioClient =
+                default_device.Activate(windows::Win32::System::Com::CLSCTX_ALL, None)?;
             let pwfx = default_client.GetMixFormat()?;
 
             let sample_rate = (*pwfx).nSamplesPerSec;
@@ -311,24 +309,112 @@ impl AudioCaptureEngine {
                             let total_ch = channels as usize;
                             for i in 0..total_frames {
                                 let (left, right) = if channels == 1 {
-                                    let s = Self::read_sample_f32(p_data, i, 0, total_ch, bits_per_sample, is_float);
+                                    let s = Self::read_sample_f32(
+                                        p_data,
+                                        i,
+                                        0,
+                                        total_ch,
+                                        bits_per_sample,
+                                        is_float,
+                                    );
                                     (s, s)
                                 } else if channels == 2 {
-                                    let l = Self::read_sample_f32(p_data, i, 0, 2, bits_per_sample, is_float);
-                                    let r = Self::read_sample_f32(p_data, i, 1, 2, bits_per_sample, is_float);
+                                    let l = Self::read_sample_f32(
+                                        p_data,
+                                        i,
+                                        0,
+                                        2,
+                                        bits_per_sample,
+                                        is_float,
+                                    );
+                                    let r = Self::read_sample_f32(
+                                        p_data,
+                                        i,
+                                        1,
+                                        2,
+                                        bits_per_sample,
+                                        is_float,
+                                    );
                                     (l, r)
                                 } else {
                                     // Downmix multicanal (5.1 / 7.1) para estéreo
-                                    let fl = Self::read_sample_f32(p_data, i, 0, total_ch, bits_per_sample, is_float);
-                                    let fr = Self::read_sample_f32(p_data, i, 1, total_ch, bits_per_sample, is_float);
-                                    let fc = Self::read_sample_f32(p_data, i, 2, total_ch, bits_per_sample, is_float);
-                                    let rl = if total_ch > 4 { Self::read_sample_f32(p_data, i, 4, total_ch, bits_per_sample, is_float) } else { 0.0 };
-                                    let rr = if total_ch > 5 { Self::read_sample_f32(p_data, i, 5, total_ch, bits_per_sample, is_float) } else { 0.0 };
-                                    let sl = if total_ch > 6 { Self::read_sample_f32(p_data, i, 6, total_ch, bits_per_sample, is_float) } else { 0.0 };
-                                    let sr = if total_ch > 7 { Self::read_sample_f32(p_data, i, 7, total_ch, bits_per_sample, is_float) } else { 0.0 };
+                                    let fl = Self::read_sample_f32(
+                                        p_data,
+                                        i,
+                                        0,
+                                        total_ch,
+                                        bits_per_sample,
+                                        is_float,
+                                    );
+                                    let fr = Self::read_sample_f32(
+                                        p_data,
+                                        i,
+                                        1,
+                                        total_ch,
+                                        bits_per_sample,
+                                        is_float,
+                                    );
+                                    let fc = Self::read_sample_f32(
+                                        p_data,
+                                        i,
+                                        2,
+                                        total_ch,
+                                        bits_per_sample,
+                                        is_float,
+                                    );
+                                    let rl = if total_ch > 4 {
+                                        Self::read_sample_f32(
+                                            p_data,
+                                            i,
+                                            4,
+                                            total_ch,
+                                            bits_per_sample,
+                                            is_float,
+                                        )
+                                    } else {
+                                        0.0
+                                    };
+                                    let rr = if total_ch > 5 {
+                                        Self::read_sample_f32(
+                                            p_data,
+                                            i,
+                                            5,
+                                            total_ch,
+                                            bits_per_sample,
+                                            is_float,
+                                        )
+                                    } else {
+                                        0.0
+                                    };
+                                    let sl = if total_ch > 6 {
+                                        Self::read_sample_f32(
+                                            p_data,
+                                            i,
+                                            6,
+                                            total_ch,
+                                            bits_per_sample,
+                                            is_float,
+                                        )
+                                    } else {
+                                        0.0
+                                    };
+                                    let sr = if total_ch > 7 {
+                                        Self::read_sample_f32(
+                                            p_data,
+                                            i,
+                                            7,
+                                            total_ch,
+                                            bits_per_sample,
+                                            is_float,
+                                        )
+                                    } else {
+                                        0.0
+                                    };
 
-                                    let l = (fl + 0.7071 * fc + 0.7071 * rl + 0.7071 * sl).clamp(-1.0, 1.0);
-                                    let r = (fr + 0.7071 * fc + 0.7071 * rr + 0.7071 * sr).clamp(-1.0, 1.0);
+                                    let l = (fl + 0.7071 * fc + 0.7071 * rl + 0.7071 * sl)
+                                        .clamp(-1.0, 1.0);
+                                    let r = (fr + 0.7071 * fc + 0.7071 * rr + 0.7071 * sr)
+                                        .clamp(-1.0, 1.0);
                                     (l, r)
                                 };
 
@@ -371,7 +457,10 @@ mod tests {
 
         if let Some(pid) = crate::process::find_root_pid_for_exe("discord.exe") {
             let client = AudioCaptureEngine::get_audio_client(pid, true);
-            assert!(client.is_ok(), "Falha ao ativar loopback para PID do Discord");
+            assert!(
+                client.is_ok(),
+                "Falha ao ativar loopback para PID do Discord"
+            );
         }
     }
 
@@ -383,12 +472,12 @@ mod tests {
                 windows::Win32::System::Com::COINIT_MULTITHREADED,
             );
 
-            let enumerator: IMMDeviceEnumerator =
-                windows::Win32::System::Com::CoCreateInstance(
-                    &MMDeviceEnumerator,
-                    None,
-                    windows::Win32::System::Com::CLSCTX_ALL,
-                ).unwrap();
+            let enumerator: IMMDeviceEnumerator = windows::Win32::System::Com::CoCreateInstance(
+                &MMDeviceEnumerator,
+                None,
+                windows::Win32::System::Com::CLSCTX_ALL,
+            )
+            .unwrap();
             let default_device = match enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia) {
                 Ok(dev) => dev,
                 Err(_) => {
@@ -396,7 +485,9 @@ mod tests {
                     return;
                 }
             };
-            let default_client: IAudioClient = default_device.Activate(windows::Win32::System::Com::CLSCTX_ALL, None).unwrap();
+            let default_client: IAudioClient = default_device
+                .Activate(windows::Win32::System::Com::CLSCTX_ALL, None)
+                .unwrap();
             let pwfx = default_client.GetMixFormat().unwrap();
 
             if let Some(pid) = crate::process::find_root_pid_for_exe("discord.exe") {
@@ -409,7 +500,10 @@ mod tests {
                     pwfx,
                     None,
                 );
-                assert!(init_res.is_ok(), "Falha ao inicializar com MixFormat do endpoint padrão");
+                assert!(
+                    init_res.is_ok(),
+                    "Falha ao inicializar com MixFormat do endpoint padrão"
+                );
             }
 
             CoTaskMemFree(Some(pwfx as *const _));
