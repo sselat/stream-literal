@@ -389,7 +389,13 @@ mod tests {
                     None,
                     windows::Win32::System::Com::CLSCTX_ALL,
                 ).unwrap();
-            let default_device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia).unwrap();
+            let default_device = match enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia) {
+                Ok(dev) => dev,
+                Err(_) => {
+                    eprintln!("Nenhum endpoint de áudio padrão ativo no momento, pulando teste.");
+                    return;
+                }
+            };
             let default_client: IAudioClient = default_device.Activate(windows::Win32::System::Com::CLSCTX_ALL, None).unwrap();
             let pwfx = default_client.GetMixFormat().unwrap();
 

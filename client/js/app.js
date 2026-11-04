@@ -42,15 +42,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const iconFullscreenExit = document.getElementById('icon-fullscreen-exit');
 
   // Elementos da Barra Lateral
+  const sidebarStreams = document.getElementById('sidebar-streams');
+  const btnCloseSidebarHeader = document.getElementById('btn-close-sidebar-header');
   const connectedCountBadge = document.getElementById('connected-count-badge');
   const streamsThumbnailsContainer = document.getElementById('streams-thumbnails-container');
+  const streamsEmptyNotice = document.getElementById('streams-empty-notice');
   const membersOnlineList = document.getElementById('members-online-list');
 
-  // Elementos da Barra Inferior
+  // Elementos dos Controles Principais (Floating Dock & Empty State CTA)
+  const btnEmptyStartShare = document.getElementById('btn-empty-start-share');
   const btnToggleShare = document.getElementById('btn-toggle-share');
   const iconStartShare = document.getElementById('icon-start-share');
   const iconStopShare = document.getElementById('icon-stop-share');
   const btnToggleShareText = document.getElementById('btn-toggle-share-text');
+  const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
 
   // Elementos do Modal Admin
   const adminModal = document.getElementById('admin-modal');
@@ -157,6 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
       userRoleBadge.textContent = 'Membro';
       btnAdminModal.style.display = 'none';
     }
+
+    updateStreamsEmptyNotice();
   }
 
   // Formulário de Login
@@ -357,10 +364,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // GERENCIAMENTO DE STREAMS E DESTAQUE (SPOTLIGHT)
   // ========================================================
 
+  function updateStreamsEmptyNotice() {
+    if (!streamsEmptyNotice) return;
+    if (activeStreams.size === 0) {
+      streamsEmptyNotice.style.display = 'flex';
+    } else {
+      streamsEmptyNotice.style.display = 'none';
+    }
+  }
+
   function handleStreamAdded(peerId, stream, user) {
     console.log(`🎥 Stream adicionada/atualizada do peer: ${peerId}`);
     activeStreams.set(peerId, { stream, user });
     renderStreamThumbnail(peerId, stream, user);
+    updateStreamsEmptyNotice();
 
     // Se nenhuma transmissão estiver destacada no momento, destaca esta automaticamente
     if (!pinnedPeerId || !activeStreams.has(pinnedPeerId)) {
@@ -376,6 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const thumbEl = document.getElementById(`thumb-${peerId}`);
     if (thumbEl) thumbEl.remove();
+    updateStreamsEmptyNotice();
 
     if (pinnedPeerId === peerId) {
       pinnedPeerId = null;
@@ -650,6 +668,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========================================================
   // CONTROLE DE COMPARTILHAMENTO DE TELA
   // ========================================================
+
+  // Botão CTA no Estado Vazio
+  if (btnEmptyStartShare) {
+    btnEmptyStartShare.addEventListener('click', () => {
+      btnToggleShare.click();
+    });
+  }
+
+  // Alternar Barra Lateral / Modo Cinema
+  function toggleSidebar() {
+    if (!sidebarStreams) return;
+    const isCollapsed = sidebarStreams.classList.toggle('sidebar-collapsed');
+    try {
+      localStorage.setItem('stream_literal_sidebar_collapsed', isCollapsed ? '1' : '0');
+    } catch (_) {}
+  }
+
+  if (btnToggleSidebar) {
+    btnToggleSidebar.addEventListener('click', toggleSidebar);
+  }
+  if (btnCloseSidebarHeader) {
+    btnCloseSidebarHeader.addEventListener('click', toggleSidebar);
+  }
+
+  // Restaura preferência salva da barra lateral
+  try {
+    if (localStorage.getItem('stream_literal_sidebar_collapsed') === '1') {
+      sidebarStreams?.classList.add('sidebar-collapsed');
+    }
+  } catch (_) {}
 
   btnToggleShare.addEventListener('click', async () => {
     if (!webrtc) return;
