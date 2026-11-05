@@ -69,16 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const formChangePassword = document.getElementById('form-change-password');
   const changePasswordStatus = document.getElementById('change-password-status');
 
-  // Elementos do Modal Isolamento de Áudio
-  const btnAudioSettings = document.getElementById('btn-audio-settings');
-  const audioSettingsModal = document.getElementById('audio-settings-modal');
-  const btnCloseAudioModal = document.getElementById('btn-close-audio-modal');
-  const audioAppsList = document.getElementById('audio-apps-list');
-  const btnRefreshAudioApps = document.getElementById('btn-refresh-audio-apps');
-  const customExeInput = document.getElementById('custom-exe-input');
-  const btnAddCustomExe = document.getElementById('btn-add-custom-exe');
-  const btnSaveAudioSettings = document.getElementById('btn-save-audio-settings');
-  const audioSettingsStatus = document.getElementById('audio-settings-status');
+
 
   // Estado da Aplicação
   let currentUser = null;
@@ -417,10 +408,17 @@ document.addEventListener('DOMContentLoaded', () => {
     spotlightVideo.autoplay = true;
 
     const isSelf = (peerId === socket?.id);
-    spotlightVideo.muted = isSelf;
+    const isTransmitting = webrtc && webrtc.isSharingScreen;
 
     if (isSelf) {
+      spotlightVideo.muted = true;
       spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill">🔇 Sua tela (áudio silenciado para você não ter eco • Transmitindo normalmente)</span>';
+      iconVolumeHigh.style.display = 'none';
+      iconVolumeMuted.style.display = 'block';
+    } else if (isTransmitting) {
+      // Proteção contra eco mútuo (Opção A): se você está transmitindo a tela, a stream assistida é silenciada localmente
+      spotlightVideo.muted = true;
+      spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill" title="Silenciado automaticamente para evitar loop de áudio com a sua própria transmissão">🔇 Áudio pausado (você está transmitindo • evita loop de eco)</span>';
       iconVolumeHigh.style.display = 'none';
       iconVolumeMuted.style.display = 'block';
     } else {
@@ -716,8 +714,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (webrtc.isSharingScreen) {
       webrtc.stopScreenShare();
     } else {
-      const ignored = getIgnoredExes();
-      await webrtc.startScreenShare(activePeers, ignored);
+      // Inicia transmissão de tela com proteção inteligente (Discord silenciado automaticamente na tela inteira)
+      await webrtc.startScreenShare(activePeers, ['discord.exe', 'stream-literal.exe']);
     }
   });
 
@@ -727,11 +725,35 @@ document.addEventListener('DOMContentLoaded', () => {
       iconStartShare.style.display = 'none';
       iconStopShare.style.display = 'block';
       btnToggleShareText.textContent = 'Parar Compartilhamento';
+
+      // Proteção contra eco mútuo (Opção A): silencia stream que o usuário estiver assistindo
+      if (pinnedPeerId && pinnedPeerId !== socket?.id && spotlightVideo && spotlightVideo.srcObject) {
+        spotlightVideo.muted = true;
+        if (spotlightAudioIndicator) {
+          spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill" title="Silenciado automaticamente para evitar loop de áudio com a sua própria transmissão">🔇 Áudio pausado (você está transmitindo • evita loop de eco)</span>';
+        }
+        if (iconVolumeHigh) iconVolumeHigh.style.display = 'none';
+        if (iconVolumeMuted) iconVolumeMuted.style.display = 'block';
+      }
     } else {
       btnToggleShare.classList.remove('streaming-active');
       iconStartShare.style.display = 'block';
       iconStopShare.style.display = 'none';
       btnToggleShareText.textContent = 'Compartilhar Tela';
+
+      // Restaura áudio da stream assistida se o volume não estiver zerado
+      if (pinnedPeerId && pinnedPeerId !== socket?.id && spotlightVideo && spotlightVideo.srcObject) {
+        const currentVol = parseFloat(spotlightVolumeSlider?.value || 1);
+        if (currentVol > 0) {
+          spotlightVideo.muted = false;
+          spotlightVideo.volume = currentVol;
+          if (iconVolumeHigh) iconVolumeHigh.style.display = 'block';
+          if (iconVolumeMuted) iconVolumeMuted.style.display = 'none';
+          if (spotlightAudioIndicator) {
+            spotlightAudioIndicator.innerHTML = '<span class="audio-status-pill">🔊 Áudio ativo</span>';
+          }
+        }
+      }
     }
   }
 
@@ -930,346 +952,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ========================================================
-  // MODAL DE ISOLAMENTO DE ÁUDIO
-  // ========================================================
-  const IGNORED_AUDIO_KEY = 'stream_literal_ignored_audio_exes';
-
-  function getIgnoredExes() {
-    let list = ['stream-literal.exe', 'msedgewebview2.exe', 'discord.exe'];
-    try {
-      const stored = localStorage.getItem(IGNORED_AUDIO_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          list = Array.from(new Set([...list, ...parsed]));
-        }
-      }
-    } catch { }
-    return list;
-  }
-
-  function saveIgnoredExes(list) {
-    const unique = Array.from(new Set(list.map(s => s.toLowerCase().trim()))).filter(Boolean);
-    localStorage.setItem(IGNORED_AUDIO_KEY, JSON.stringify(unique));
-  }
-
-  async function loadAudioApps() {
-    if (!audioAppsList) return;
-    audioAppsList.innerHTML = '<div class="loading-apps" style="padding:16px;text-align:center;color:var(--text-muted);font-size:0.85rem;">Escaneando processos ativos do Windows...</div>';
-
-    const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke;
-    const isTauri = typeof invoke === 'function';
-    const ignored = getIgnoredExes();
-
-    if (!isTauri) {
-      // Executando no navegador comum
-      let html = `
-        <div class="web-fallback-note">
-          <strong>🌐 Acesso via Navegador Web</strong><br>
-          A detecção em tempo real e isolamento nativo de canais de som do Windows é ativada usando o <strong>App Desktop da Stream Literal</strong>.
-          No navegador web, a transmissão de áudio usa o mixer padrão do sistema.
-        </div>
-      `;
-      html += '<div style="font-size:0.8rem;font-weight:600;margin-bottom:6px;color:var(--text-muted);">PROGRAMAS NA LISTA NEGRA SALVA:</div>';
-      ignored.forEach(exe => {
-        html += `
-          <div class="audio-app-item selected">
-            <input type="checkbox" checked data-exe="${escapeHtml(exe)}" id="chk-web-${escapeHtml(exe)}">
-            <div class="app-icon-badge ${exe.includes('discord') ? 'icon-discord' : 'icon-game'}">
-              ${exe.includes('discord') ? '💬' : '🎵'}
-            </div>
-            <div class="app-info-col">
-              <span class="app-info-name">${escapeHtml(exe)}</span>
-              <span class="app-info-exe">Regra salva permanentemente</span>
-            </div>
-            <span class="app-ignored-tag">Silenciado</span>
-          </div>
-        `;
-      });
-      audioAppsList.innerHTML = html;
-      return;
-    }
-
-    try {
-      const apps = await invoke('get_audio_apps');
-      renderAudioAppsList(apps, ignored);
-    } catch (err) {
-      audioAppsList.innerHTML = `<div style="padding:12px;color:var(--danger);font-size:0.85rem;">Erro ao listar aplicativos: ${err.message}</div>`;
-    }
-  }
-
-  window.onCaptureModeChanged = function() {
-    if (audioSettingsModal && audioSettingsModal.style.display !== 'none') {
-      loadAudioApps();
-    }
-  };
-
-  function renderAudioAppsList(apps, ignored) {
-    audioAppsList.innerHTML = '';
-
-    const isSharing = webrtc && webrtc.isSharingScreen;
-    const captureMode = webrtc?.currentCaptureMode;
-    const isWindowMode = isSharing && captureMode?.isWindow;
-    const windowApp = captureMode?.app;
-
-    if (isWindowMode) {
-      const appName = windowApp?.display_name || windowApp?.exe_name || 'Janela Selecionada';
-      const banner = document.createElement('div');
-      banner.className = 'audio-mode-banner banner-window';
-      banner.innerHTML = `
-        <div class="banner-icon">🪟</div>
-        <div>
-          <div class="banner-title">Modo Janela Ativo</div>
-          Transmitindo exclusivamente o som de <strong>${escapeHtml(appName)}</strong>. Todo o restante do seu computador está silenciado na transmissão.
-        </div>
-      `;
-      audioAppsList.appendChild(banner);
-    } else if (isSharing) {
-      const banner = document.createElement('div');
-      banner.className = 'audio-mode-banner banner-screen';
-      banner.innerHTML = `
-        <div class="banner-icon">🖥️</div>
-        <div>
-          <div class="banner-title">Modo Tela Inteira Ativo</div>
-          Transmitindo áudio geral do sistema. Os programas marcados abaixo estão sendo silenciados em tempo real contra eco.
-        </div>
-      `;
-      audioAppsList.appendChild(banner);
-    }
-
-    const allExesMap = new Map();
-    apps.forEach(a => allExesMap.set(a.exe_name.toLowerCase(), a));
-
-    // Garante que Stream Literal e WebView2 sempre estejam visíveis e marcados como protegidos
-    if (!allExesMap.has('stream-literal.exe')) {
-      allExesMap.set('stream-literal.exe', {
-        name: 'Stream Literal',
-        exe_name: 'stream-literal.exe',
-        icon_hint: 'shield',
-        pid: 0
-      });
-    } else {
-      const sl = allExesMap.get('stream-literal.exe');
-      sl.name = 'Stream Literal';
-      sl.icon_hint = 'shield';
-    }
-
-    if (!allExesMap.has('msedgewebview2.exe')) {
-      allExesMap.set('msedgewebview2.exe', {
-        name: 'Interface do App (WebView2)',
-        exe_name: 'msedgewebview2.exe',
-        icon_hint: 'shield',
-        pid: 0
-      });
-    } else {
-      const wv = allExesMap.get('msedgewebview2.exe');
-      wv.name = 'Interface do App (WebView2)';
-      wv.icon_hint = 'shield';
-    }
-
-    ignored.forEach(exe => {
-      const lower = exe.toLowerCase();
-      if (!allExesMap.has(lower)) {
-        allExesMap.set(lower, {
-          name: lower.includes('discord') ? 'Discord' : lower.includes('spotify') ? 'Spotify' : exe,
-          exe_name: exe,
-          icon_hint: lower.includes('discord') ? 'discord' : lower.includes('spotify') ? 'spotify' : 'app',
-          pid: 0
-        });
-      }
-    });
-
-    // Se estiver em modo janela e tivermos o app detectado, assegura que ele esteja no mapa
-    if (isWindowMode && windowApp?.exe_name) {
-      const targetLower = windowApp.exe_name.toLowerCase();
-      if (!allExesMap.has(targetLower)) {
-        allExesMap.set(targetLower, {
-          name: windowApp.display_name || windowApp.exe_name,
-          exe_name: windowApp.exe_name,
-          icon_hint: 'game',
-          pid: windowApp.pid || 0
-        });
-      }
-    }
-
-    const mergedList = Array.from(allExesMap.values());
-    mergedList.sort((a, b) => {
-      const aLower = a.exe_name.toLowerCase();
-      const bLower = b.exe_name.toLowerCase();
-
-      // Em modo janela, a aplicação capturada fica em 1º lugar absoluto
-      if (isWindowMode && windowApp?.exe_name) {
-        const targetLower = windowApp.exe_name.toLowerCase();
-        if (aLower === targetLower) return -1;
-        if (bLower === targetLower) return 1;
-      }
-
-      // Processos protegidos nativos (Stream Literal e WebView2) vêm logo a seguir
-      const aIsProtected = aLower === 'stream-literal.exe' || aLower === 'msedgewebview2.exe';
-      const bIsProtected = bLower === 'stream-literal.exe' || bLower === 'msedgewebview2.exe';
-      if (aIsProtected && !bIsProtected) return -1;
-      if (!aIsProtected && bIsProtected) return 1;
-
-      const aIgnored = ignored.includes(aLower) ? 0 : 1;
-      const bIgnored = ignored.includes(bLower) ? 0 : 1;
-      return aIgnored - bIgnored || a.name.localeCompare(b.name);
-    });
-
-    mergedList.forEach(app => {
-      const low = app.exe_name.toLowerCase();
-      const isProtected = low === 'stream-literal.exe' || low === 'msedgewebview2.exe';
-      const isTargetWindow = isWindowMode && windowApp?.exe_name && low === windowApp.exe_name.toLowerCase();
-      const isChecked = isProtected || isWindowMode || ignored.includes(low);
-
-      const item = document.createElement('div');
-      item.className = `audio-app-item ${isChecked ? 'selected' : ''} ${isTargetWindow ? 'capturing' : ''}`;
-
-      let iconEmoji = '🎮';
-      if (app.icon_hint === 'shield') iconEmoji = '🛡️';
-      else if (app.icon_hint === 'discord') iconEmoji = '💬';
-      else if (app.icon_hint === 'spotify') iconEmoji = '🎵';
-      else if (app.icon_hint === 'browser') iconEmoji = '🌐';
-      else if (app.icon_hint === 'steam') iconEmoji = '🕹️';
-
-      let tagHtml = '';
-      let statusSub = app.pid ? `(PID: ${app.pid})` : (isProtected ? '(Sistema)' : '(Fechado)');
-
-      if (isTargetWindow) {
-        tagHtml = '<span class="app-capturing-tag">🔊 Transmitindo Áudio</span>';
-        statusSub = '(Janela Ativa em Transmissão)';
-      } else if (isProtected) {
-        tagHtml = '<span class="app-ignored-tag system-shield">🛡️ Silenciado (Anti-Eco)</span>';
-      } else if (isWindowMode) {
-        tagHtml = '<span class="app-ignored-tag window-muted">🔇 Silenciado (Modo Janela)</span>';
-      } else if (isChecked) {
-        tagHtml = '<span class="app-ignored-tag">Silenciado</span>';
-      }
-
-      item.innerHTML = `
-        <input type="checkbox" ${isChecked ? 'checked' : ''} ${isProtected || isWindowMode ? 'disabled' : ''} data-exe="${escapeHtml(app.exe_name)}">
-        <div class="app-icon-badge icon-${app.icon_hint}">
-          ${iconEmoji}
-        </div>
-        <div class="app-info-col">
-          <span class="app-info-name">${escapeHtml(app.name)}</span>
-          <span class="app-info-exe">${escapeHtml(app.exe_name)} ${statusSub}</span>
-        </div>
-        ${tagHtml}
-      `;
-
-      if (!isProtected && !isWindowMode) {
-        const chk = item.querySelector('input[type="checkbox"]');
-        item.addEventListener('click', (e) => {
-          if (e.target !== chk) {
-            chk.checked = !chk.checked;
-          }
-          item.classList.toggle('selected', chk.checked);
-          let tag = item.querySelector('.app-ignored-tag');
-          if (chk.checked && !tag) {
-            const span = document.createElement('span');
-            span.className = 'app-ignored-tag';
-            span.textContent = 'Silenciado';
-            item.appendChild(span);
-          } else if (!chk.checked && tag) {
-            tag.remove();
-          }
-        });
-      }
-
-      audioAppsList.appendChild(item);
-    });
-  }
-
-  if (btnAudioSettings) {
-    btnAudioSettings.addEventListener('click', () => {
-      audioSettingsModal.style.display = 'flex';
-      loadAudioApps();
-    });
-  }
-
-  if (btnCloseAudioModal) {
-    btnCloseAudioModal.addEventListener('click', () => {
-      audioSettingsModal.style.display = 'none';
-    });
-  }
-
-  if (audioSettingsModal) {
-    audioSettingsModal.addEventListener('click', (e) => {
-      if (e.target === audioSettingsModal) {
-        audioSettingsModal.style.display = 'none';
-      }
-    });
-  }
-
-  if (btnRefreshAudioApps) {
-    btnRefreshAudioApps.addEventListener('click', () => {
-      loadAudioApps();
-    });
-  }
-
-  if (btnAddCustomExe && customExeInput) {
-    customExeInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        btnAddCustomExe.click();
-      }
-    });
-
-    btnAddCustomExe.addEventListener('click', () => {
-      let val = customExeInput.value.trim().toLowerCase();
-      if (!val) return;
-      if (!val.endsWith('.exe')) val += '.exe';
-      const current = getIgnoredExes();
-      if (!current.includes(val)) {
-        current.push(val);
-        saveIgnoredExes(current);
-      }
-      customExeInput.value = '';
-      loadAudioApps();
-    });
-  }
-
-  if (btnSaveAudioSettings) {
-    btnSaveAudioSettings.addEventListener('click', async () => {
-      const checkboxes = audioAppsList.querySelectorAll('input[type="checkbox"]');
-      const selected = [];
-      checkboxes.forEach(c => {
-        if (c.checked && c.dataset.exe) {
-          selected.push(c.dataset.exe.toLowerCase());
-        }
-      });
-      // Garante sempre stream-literal.exe e msedgewebview2.exe como protegidos por padrão
-      if (!selected.includes('stream-literal.exe')) selected.push('stream-literal.exe');
-      if (!selected.includes('msedgewebview2.exe')) selected.push('msedgewebview2.exe');
-
-      saveIgnoredExes(selected);
-      audioSettingsStatus.className = 'status-msg success';
-      audioSettingsStatus.textContent = '✅ Configurações salvas permanentemente!';
-
-      // Se estiver transmitindo ativamente no desktop, atualiza o filtro nativo em tempo real
-      if (webrtc && webrtc.isSharingScreen && window.AudioBridge?.isCapturing) {
-        try {
-          const res = await window.AudioBridge.updateExclusions(selected, true);
-          if (res?.target_exe) {
-            showNotice(`Filtro atualizado em tempo real! "${res.target_exe}" está silenciado.`, 'info');
-          } else {
-            showNotice('Filtro atualizado em tempo real! Áudio do sistema ativo com proteção contra eco.', 'info');
-          }
-        } catch (err) {
-          console.warn('Erro ao atualizar exclusão mid-stream:', err);
-        }
-      } else {
-        showNotice('Filtro de áudio atualizado! Sons selecionados serão ignorados.', 'info');
-      }
-
-      setTimeout(() => {
-        audioSettingsStatus.textContent = '';
-        audioSettingsModal.style.display = 'none';
-      }, 1200);
-    });
-  }
-
   function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>'"]/g, 
@@ -1282,7 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // VERSÃO DO APP E NOTIFICAÇÃO DO ATUALIZADOR (TAURI)
   // ========================================================
   async function initAppVersion() {
-    let ver = 'v1.0.4';
+    let ver = 'v1.0.5';
     try {
       if (window.__TAURI__ && window.__TAURI__.core) {
         const nativeVer = await window.__TAURI__.core.invoke('get_app_version');

@@ -221,17 +221,53 @@ pub fn find_root_pid_for_exe(exe_name: &str) -> Option<u32> {
     }
 }
 
-pub fn find_first_active_target(exes: &[String]) -> Option<(String, u32)> {
-    for exe in exes {
-        let lower = exe.to_lowercase();
-        if lower == "stream-literal.exe" || lower == "msedgewebview2.exe" {
-            return Some((lower, std::process::id()));
-        }
-        if let Some(pid) = find_root_pid_for_exe(exe) {
-            return Some((exe.clone(), pid));
+pub fn find_default_exclusion_target() -> (String, u32) {
+    // Alvo prioritário absoluto para exclusão em modo tela inteira: Discord!
+    // Se o usuário estiver no Discord em chamada, silencia o Discord inteiro da stream.
+    let discord_exes = [
+        "discord.exe",
+        "discordptb.exe",
+        "discordcanary.exe",
+        "discorddevelopment.exe",
+    ];
+    for disc in &discord_exes {
+        if let Some(pid) = find_root_pid_for_exe(disc) {
+            return (disc.to_string(), pid);
         }
     }
-    None
+    // Se o Discord não estiver aberto, o alvo padrão é o próprio Stream Literal
+    ("stream-literal.exe".to_string(), std::process::id())
+}
+
+pub fn find_first_active_target(exes: &[String]) -> Option<(String, u32)> {
+    // 1. Prioriza Discord se estiver na lista ou rodando no sistema
+    let discord_exes = [
+        "discord.exe",
+        "discordptb.exe",
+        "discordcanary.exe",
+        "discorddevelopment.exe",
+    ];
+    for disc in &discord_exes {
+        let is_requested = exes.iter().any(|e| e.to_lowercase() == *disc);
+        if is_requested {
+            if let Some(pid) = find_root_pid_for_exe(disc) {
+                return Some((disc.to_string(), pid));
+            }
+        }
+    }
+
+    // 2. Procura os outros processos requisitados (exceto os do Stream Literal)
+    for exe in exes {
+        let lower = exe.to_lowercase();
+        if lower != "stream-literal.exe" && lower != "msedgewebview2.exe" {
+            if let Some(pid) = find_root_pid_for_exe(exe) {
+                return Some((exe.clone(), pid));
+            }
+        }
+    }
+
+    // 3. Se nada foi encontrado ou se os únicos eram do Stream Literal, usa o alvo padrão inteligente
+    Some(find_default_exclusion_target())
 }
 
 pub fn get_audio_session_pids() -> HashSet<u32> {

@@ -65,12 +65,12 @@ fn start_audio_capture(
         }
     }
 
-    // Se estiver em modo de exclusão e nenhum PID for identificado, o alvo padrão
-    // de exclusão passa a ser o próprio Stream Literal (std::process::id()),
-    // garantindo proteção absoluta contra loop de eco entre transmissões mútuas.
+    // Se estiver em modo de exclusão e nenhum PID for identificado, aciona o alvo inteligente
+    // (priorizando o silenciamento do Discord para conversas por voz sem eco).
     if resolved_pid == 0 && exclude {
-        resolved_pid = std::process::id();
-        chosen_exe = Some("stream-literal.exe".to_string());
+        let (def_exe, def_pid) = process::find_default_exclusion_target();
+        resolved_pid = def_pid;
+        chosen_exe = Some(def_exe);
     }
 
     let engine = state.audio_engine.lock().map_err(|e| e.to_string())?;

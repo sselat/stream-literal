@@ -86,7 +86,7 @@ class WebRTCManager {
   // TRANSMISSÃO (PRODUTOR / SENDER)
   // ========================================================
 
-  async startScreenShare(existingPeers = [], ignoredExes = ['stream-literal.exe', 'msedgewebview2.exe', 'discord.exe']) {
+  async startScreenShare(existingPeers = [], ignoredExes = ['discord.exe', 'stream-literal.exe']) {
     let capturedStream = null;
     let audioFailed = false;
 
@@ -183,13 +183,18 @@ class WebRTCManager {
             this.onNotice(`Modo Janela Ativo! Transmitindo exclusivamente o som de "${windowApp.display_name}". Todo o restante do PC está silenciado.`, 'info');
           }
         } else {
-          // Modo Tela Inteira: captura som do sistema com exclusão segura de Stream Literal e Discord
-          audioResult = await window.AudioBridge.start(ignoredExes, true);
+          // Modo Tela Inteira: captura som do sistema com exclusão automática do Discord
+          audioResult = await window.AudioBridge.start(['discord.exe', 'stream-literal.exe'], true);
           if (this.onNotice) {
             if (audioResult?.info?.target_exe) {
-              this.onNotice(`Transmissão iniciada! Áudio de "${audioResult.info.target_exe}" isolado com sucesso.`, 'info');
+              const target = audioResult.info.target_exe.toLowerCase();
+              if (target.includes('discord')) {
+                this.onNotice('Transmissão de Tela Inteira iniciada! O Discord está silenciado automaticamente para proteger sua chamada de voz.', 'info');
+              } else {
+                this.onNotice(`Transmissão de Tela Inteira iniciada! Áudio de "${audioResult.info.target_exe}" silenciado da transmissão.`, 'info');
+              }
             } else {
-              this.onNotice('Transmissão iniciada! Áudio do sistema ativo com proteção contra eco.', 'info');
+              this.onNotice('Transmissão de Tela Inteira iniciada com áudio do sistema.', 'info');
             }
           }
         }

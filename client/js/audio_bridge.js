@@ -30,7 +30,7 @@ class AudioBridge {
    * @param {boolean} exclude - true para capturar todo o sistema EXCETO os alvos
    * @returns {Promise<{ track: MediaStreamTrack, info: any }>}
    */
-  async start(targetExes = ['stream-literal.exe', 'msedgewebview2.exe', 'discord.exe'], exclude = true, targetPid = null) {
+  async start(targetExes = ['discord.exe', 'stream-literal.exe'], exclude = true, targetPid = null) {
     if (!this.isSupported()) {
       throw new Error('Tauri API não disponível para captura nativa.');
     }
@@ -156,7 +156,7 @@ class AudioBridge {
   /**
    * Atualiza as exclusões em tempo real durante uma transmissão em andamento
    */
-  async updateExclusions(targetExes = ['stream-literal.exe', 'msedgewebview2.exe', 'discord.exe'], exclude = true, targetPid = null) {
+  async updateExclusions(targetExes = ['discord.exe', 'stream-literal.exe'], exclude = true, targetPid = null) {
     if (!this.isCapturing || !this.isSupported()) return null;
 
     const { Channel, invoke } = window.__TAURI__.core;

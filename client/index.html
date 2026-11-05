@@ -233,15 +233,7 @@
               <span id="btn-toggle-share-text">Compartilhar Tela</span>
             </button>
 
-            <div class="dock-sep"></div>
 
-            <button id="btn-audio-settings" class="dock-btn-secondary" title="Configurar Isolamento de Áudio">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-              </svg>
-              <span>Filtro de Áudio</span>
-            </button>
 
 
           </nav>
@@ -304,59 +296,7 @@
 
   </div>
 
-  <!-- ================= MODAL ISOLAMENTO DE ÁUDIO ================= -->
-  <div id="audio-settings-modal" class="modal-backdrop" style="display: none;">
-    <div class="modal-card" style="max-width: 520px;">
-      <div class="modal-header">
-        <div class="modal-title-with-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-          <h3>Isolamento de Áudio da Transmissão</h3>
-        </div>
-        <button id="btn-close-audio-modal" class="btn-close">&times;</button>
-      </div>
 
-      <div class="modal-body">
-        <p class="modal-desc">
-          Controle exatamente quais sons do computador são transmitidos aos seus amigos. As configurações ficam salvas permanentemente no seu aplicativo.
-        </p>
-
-        <!-- Seletor de Modo -->
-        <div class="audio-mode-selector">
-          <label class="radio-card active" id="mode-card-exclude">
-            <input type="radio" name="audio-mode" value="exclude" checked>
-            <div class="radio-card-content">
-              <strong>Modo Inteligente (Silenciar Selecionados)</strong>
-              <span>Transmite todo o som do computador, mas <strong>bloqueia</strong> os aplicativos marcados abaixo (ideal para silenciar o Discord).</span>
-            </div>
-          </label>
-        </div>
-
-        <div class="audio-apps-header">
-          <span>Aplicativos em Execução</span>
-          <button type="button" id="btn-refresh-audio-apps" class="btn btn-secondary btn-xs">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-            <span>Atualizar Lista</span>
-          </button>
-        </div>
-
-        <!-- Lista de Apps com checkboxes -->
-        <div id="audio-apps-list" class="audio-apps-list">
-          <div class="loading-apps">Carregando aplicativos ativos...</div>
-        </div>
-
-        <!-- Input para adicionar executável manual -->
-        <div class="custom-exe-row">
-          <input type="text" id="custom-exe-input" placeholder="Adicionar outro executável (ex: discord.exe)">
-          <button type="button" id="btn-add-custom-exe" class="btn btn-secondary btn-sm">Adicionar</button>
-        </div>
-
-        <div class="modal-actions-footer">
-          <button type="button" id="btn-save-audio-settings" class="btn btn-primary btn-block">Salvar Preferências de Áudio</button>
-        </div>
-        <div id="audio-settings-status" class="status-msg"></div>
-      </div>
-    </div>
-  </div>
 
   <!-- ================= MODAL ALTERAR SENHA ================= -->
   <div id="password-modal" class="modal-backdrop" style="display: none;">
